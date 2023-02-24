@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 
 
 # Load the data
-df = pd.read_csv('pedat.csv')
+df = pd.read_pickle("pedi" + '.pkl', compression='gzip')
 
 # Convert TIME2 to a datetime format
 df['TIME2'] = pd.to_datetime(df['TIME2'])
