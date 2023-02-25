@@ -6,11 +6,14 @@ from datetime import datetime as dt
 import time
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
-
+import numpy as np
+import base64
+from io import BytesIO
+import os
 
 
 # Load the data
-df = pd.read_pickle("pedi" + '.pkl', compression='gzip')
+df = pd.read_pickle("pediN" + '.pkl', compression='gzip')
 
 # Convert TIME2 to a datetime format
 df['TIME2'] = pd.to_datetime(df['TIME2'])
@@ -49,10 +52,43 @@ def format_metric(value):
         return str(value)
 
 
-def make_chart(df, signals, start_date, end_date, template='plotly'):
-    df = df[(df['TIME2'] >= start_date) & (df['TIME2'] <= end_date)]
-    fig = px.line(df[df['SIGNAL'].isin(signals)], x=x_axis_label, y=y_axis_label, color='SIGNAL', template=template)
-    fig.update_xaxes(title_text='Date')
+def make_chart(df, signals, start_date, end_date, aggregation_method, location, template='plotly'):
+    if aggregation_method == 'Hourly':
+        groupby = ['SIGNAL', pd.Grouper(key='TIME2', freq='1H')]
+    elif aggregation_method == 'Daily':
+        groupby = ['SIGNAL', pd.Grouper(key='TIME2', freq='1D')]
+    elif aggregation_method == 'Weekly':
+        groupby = ['SIGNAL', pd.Grouper(key='TIME2', freq='1W')]
+    elif aggregation_method == 'Monthly':
+        groupby = ['SIGNAL', pd.Grouper(key='TIME2', freq='1M')]
+    elif aggregation_method == 'Yearly':
+        groupby = ['SIGNAL', pd.Grouper(key='TIME2', freq='1Y')]
+
+    if location == 'Intersection':
+        filter_val = 'all'
+        col = 'PED'
+    else:
+        filter_val = location.split()[-1]
+        col = 'P'
+
+    # Filter the dataframe by the selected signals and date range
+    df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] <= end_date) & (df['SIGNAL'].isin(signals))]
+
+    # Aggregate the data
+    if location == 'Intersection':
+        df_agg = df_filtered.groupby(groupby).agg({'PED': 'sum'}).reset_index()
+    else:
+        df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby(groupby).agg({'PED': 'sum'}).reset_index()
+
+    # Create the line chart
+    if aggregation_method == 'Hourly':
+        x_axis_label = 'Time'
+        fig = px.line(df_agg, x='TIME2', y='PED', color='SIGNAL', template=template)
+    else:
+        x_axis_label = 'Date'
+        fig = px.line(df_agg, x='TIME2', y='PED', color='SIGNAL', template=template, line_group='SIGNAL')
+
+    fig.update_xaxes(title_text=x_axis_label)
     fig.update_yaxes(title_text='Pedestrian Estimated')
     fig.update_traces(line=dict(width=3))
 
@@ -77,6 +113,7 @@ def make_chart(df, signals, start_date, end_date, template='plotly'):
 
     return fig
 
+
 def make_pie_chart(df, signals, start_date, end_date):
     # Filter the dataframe by the selected signals and date range
     df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] < end_date) & (df['SIGNAL'].isin(signals))]
@@ -94,7 +131,7 @@ def make_pie_chart(df, signals, start_date, end_date):
 
 
 def make_pie_and_bar_chart(df, signals, start_date, end_date):
-    # Filter the dataframe by the selected signals and date range
+    # Filter the dataframe by the selected signals, date range, and day type
     df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] < end_date) & (df['SIGNAL'].isin(signals))]
 
     # Aggregate the data by signal and sum the pedestrian counts
@@ -117,15 +154,21 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date):
     return fig_combined
 
 
-
-
-def make_map(df, start_date, end_date, signals):
+def make_map(df, start_date, end_date, signals, aggregation_method):
     # Filter by date and selected signals
     mask = (df['TIME2'] >= start_date) & (df['TIME2'] < end_date) & (df['SIGNAL'].isin(signals))
     df_filtered = df.loc[mask]
+    agg_functions = {
+    'Hourly': 'sum',
+    'Daily': 'sum',
+    'Weekly': 'sum',
+    'Monthly': 'sum',
+    'Yearly': 'sum'
+    }
 
+    aggregation_function = agg_functions[aggregation_method]
     # Aggregate by location
-    df_agg = df_filtered.groupby(['LAT', 'LNG']).agg({'SIGNAL': 'sum', 'PED': 'sum'}).reset_index()
+    df_agg = df_filtered.groupby(['LAT', 'LNG']).agg({'PED': aggregation_function}).reset_index()
 
     # Create the HeatmapLayer
     heatmap_layer = pdk.Layer(
@@ -156,6 +199,42 @@ def make_map(df, start_date, end_date, signals):
     )
     return fig
 
+import io
+
+@st.cache_data
+def save_csv(df, selected_signals, start_date_selected, end_date_selected, location_selected, aggregation_method_selected):
+    # Filter the data based on the selected signals, location, and date range
+    df_filtered2 = df[(df['TIME2'] >= start_date_selected) & (df['TIME2'] < end_date_selected)]
+    if "All" not in selected_signals:
+        df_filtered2 = df_filtered2[df_filtered2['SIGNAL'].isin(selected_signals)]
+    if location_selected != 'Intersection':
+        phase_num = int(location_selected.split()[1])
+        df_filtered2 = df_filtered2[df_filtered2['P'] == phase_num]
+
+    # Aggregate the data based on the selected aggregation method
+    if aggregation_method_selected == 'Hourly':
+        freq = 'H'
+    elif aggregation_method_selected == 'Daily':
+        freq = 'D'
+    elif aggregation_method_selected == 'Weekly':
+        freq = 'W-MON'
+    elif aggregation_method_selected == 'Monthly':
+        freq = 'MS'
+    elif aggregation_method_selected == 'Yearly':
+        freq = 'YS'
+
+    agg_dict = {col: 'first' for col in df_filtered2.columns if col not in ['PED']}
+    agg_dict['PED'] = 'sum'
+    df_aggregated = df_filtered2.groupby([pd.Grouper(key='TIME2', freq=freq), 'SIGNAL', 'CITY', 'P']).agg(agg_dict)
+    df_aggregated.reset_index(drop=True,inplace=True)
+
+    #filename = f"pedestrian_counts_{location_selected}_{aggregation_method_selected}.csv"
+    #st.sidebar.success(f"{filename} successfully saved!")
+    return df_aggregated.to_csv(index=False)
+
+
+
+
 
 # Define the Streamlit app
 def main():
@@ -167,6 +246,14 @@ def main():
 
     # Add a subtitle to the sidebar
     st.sidebar.markdown(f'[Singleton Transportation Lab](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
+    
+    # Add a slider for selecting the location
+    locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df['P'].dropna().unique().tolist())]
+    location_selected = st.sidebar.selectbox('Select location', options=locations)
+
+    # Add a slider for selecting the aggregation method
+    aggregation_methods = ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly']
+    aggregation_method_selected = st.sidebar.selectbox('Select aggregation method', options=aggregation_methods)
 
     # Add a multiselect to choose the signals
     signals = ["All"] + df['SIGNAL'].unique().tolist()
@@ -207,7 +294,7 @@ def main():
 
     st.subheader('Time series')
     # Make the time series plot
-    fig = make_chart(df, selected_signals, start_date_selected, end_date_selected, template='plotly_dark')
+    fig = make_chart(df, selected_signals, start_date_selected, end_date_selected, aggregation_method_selected, location_selected, template='plotly_dark')
     st.plotly_chart(fig, use_container_width=True )
 
     st.subheader('Pedestrian Activity in relation to Signal and City')
@@ -216,8 +303,17 @@ def main():
 
     st.subheader('Pedestrian Activity by Location')
     # Make the map
-    fig = make_map(df, start_date_selected, end_date_selected , selected_signals)
+    fig = make_map(df, start_date_selected, end_date_selected , selected_signals , aggregation_method_selected)
     st.pydeck_chart(fig)
 
+    csv = save_csv(df, selected_signals, start_date_selected, end_date_selected, location_selected, aggregation_method_selected)
+
+    st.sidebar.download_button(
+        label="Download data as CSV",
+        data=csv,
+        file_name=f"{selected_signals}_{location_selected}_{aggregation_method_selected}.csv",
+        mime='text/csv',
+    )
+   
 if __name__ == '__main__':
     main()
