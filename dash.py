@@ -249,7 +249,7 @@ def main():
     
     # Add a slider for selecting the location
     locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df['P'].dropna().unique().tolist())]
-    location_selected = st.sidebar.selectbox('Select location', options=locations)
+    location_selected = st.sidebar.selectbox('Select approach', options=locations)
 
     # Add a slider for selecting the aggregation method
     aggregation_methods = ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly']
