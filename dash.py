@@ -243,6 +243,12 @@ def main():
     # Add a subtitle to the sidebar
     st.sidebar.markdown(f'[Singleton Transportation Lab](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
     
+    # If "All" is selected, show all signals
+    if "All" in selected_signals:
+        selected_signals = df['SIGNAL'].unique().tolist()
+    else:
+        selected_signals = selected_signals or default_signals
+        
     # Add a multiselect to choose the signals
     signals = ["All"] + df['SIGNAL'].unique().tolist()
     default_signals = [signals[1]]
