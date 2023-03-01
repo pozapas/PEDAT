@@ -232,10 +232,6 @@ def save_csv(df, selected_signals, start_date_selected, end_date_selected, locat
     #st.sidebar.success(f"{filename} successfully saved!")
     return df_aggregated.to_csv(index=False)
 
-
-
-
-
 # Define the Streamlit app
 def main():
     # Set the app title
@@ -247,6 +243,11 @@ def main():
     # Add a subtitle to the sidebar
     st.sidebar.markdown(f'[Singleton Transportation Lab](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
     
+    # Add a multiselect to choose the signals
+    signals = ["All"] + df['SIGNAL'].unique().tolist()
+    default_signals = [signals[1]]
+    selected_signals = st.sidebar.multiselect('Select signals', signals, default=default_signals)
+
     # Add a slider for selecting the location
     locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df['P'].dropna().unique().tolist())]
     location_selected = st.sidebar.selectbox('Select approach', options=locations)
@@ -254,18 +255,6 @@ def main():
     # Add a slider for selecting the aggregation method
     aggregation_methods = ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly']
     aggregation_method_selected = st.sidebar.selectbox('Select aggregation method', options=aggregation_methods)
-
-    # Add a multiselect to choose the signals
-    signals = ["All"] + df['SIGNAL'].unique().tolist()
-    default_signals = [signals[1]]
-    selected_signals = st.sidebar.multiselect('Select signals', signals, default=default_signals)
-
-    # If "All" is selected, show all signals
-    if "All" in selected_signals:
-        selected_signals = df['SIGNAL'].unique().tolist()
-    else:
-        selected_signals = selected_signals or default_signals
-
 
     # Add a time range slider to select the date range
     start_date = df['TIME2'].min().date()
