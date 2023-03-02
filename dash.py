@@ -242,7 +242,6 @@ def main():
 
     # Add a subtitle to the sidebar
     st.sidebar.markdown(f'[Singleton Transportation Lab](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
-    
       
     # Add a multiselect to choose the signals
     signals = ["All"] + df['SIGNAL'].unique().tolist()
@@ -310,6 +309,13 @@ def main():
         file_name=f"{selected_signals}_{location_selected}_{aggregation_method_selected}.csv",
         mime='text/csv',
     )
+
+    hide_menu_style = """
+        <style>
+        #MainMenu {visibility: hidden;}
+        </style>
+        """
+    st.markdown(hide_menu_style, unsafe_allow_html=True)
    
 if __name__ == '__main__':
     main()
