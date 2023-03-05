@@ -13,7 +13,6 @@ import os
 
 
 # Load the data
-@st.cache_data
 df = pd.read_pickle("pediN" + '.pkl', compression='gzip')
 
 # Convert TIME2 to a datetime format
