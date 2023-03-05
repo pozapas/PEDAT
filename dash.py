@@ -13,6 +13,7 @@ import os
 
 
 # Load the data
+@st.cache_data
 df = pd.read_pickle("pediN" + '.pkl', compression='gzip')
 
 # Convert TIME2 to a datetime format
@@ -129,7 +130,7 @@ def make_pie_chart(df, signals, start_date, end_date):
 
     return fig
 
-
+@st.cache_data
 def make_pie_and_bar_chart(df, signals, start_date, end_date):
     # Filter the dataframe by the selected signals, date range, and day type
     df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] < end_date) & (df['SIGNAL'].isin(signals))]
@@ -153,7 +154,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date):
 
     return fig_combined
 
-
+@st.cache_data
 def make_map(df, start_date, end_date, signals, aggregation_method):
     # Filter by date and selected signals
     mask = (df['TIME2'] >= start_date) & (df['TIME2'] < end_date) & (df['SIGNAL'].isin(signals))
@@ -233,6 +234,7 @@ def save_csv(df, selected_signals, start_date_selected, end_date_selected, locat
     return df_aggregated.to_csv(index=False)
 
 # Define the Streamlit app
+@st.cache_data
 def main():
     # Set the app title
     st.set_page_config(page_title='Time Series Dashboard')
