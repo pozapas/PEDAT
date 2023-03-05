@@ -51,7 +51,7 @@ def format_metric(value):
     else:
         return str(value)
 
-@st.cache_data
+
 def make_chart(df, signals, start_date, end_date, aggregation_method, location, template='plotly'):
     if aggregation_method == 'Hourly':
         groupby = ['SIGNAL', pd.Grouper(key='TIME2', freq='1H')]
@@ -129,7 +129,7 @@ def make_pie_chart(df, signals, start_date, end_date):
 
     return fig
 
-@st.cache_data
+
 def make_pie_and_bar_chart(df, signals, start_date, end_date):
     # Filter the dataframe by the selected signals, date range, and day type
     df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] < end_date) & (df['SIGNAL'].isin(signals))]
@@ -153,7 +153,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date):
 
     return fig_combined
 
-@st.cache_data
+
 def make_map(df, start_date, end_date, signals, aggregation_method):
     # Filter by date and selected signals
     mask = (df['TIME2'] >= start_date) & (df['TIME2'] < end_date) & (df['SIGNAL'].isin(signals))
