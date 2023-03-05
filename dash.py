@@ -233,7 +233,6 @@ def save_csv(df, selected_signals, start_date_selected, end_date_selected, locat
     return df_aggregated.to_csv(index=False)
 
 # Define the Streamlit app
-@st.cache_data
 def main():
     # Set the app title
     st.set_page_config(page_title='Time Series Dashboard')
