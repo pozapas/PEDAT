@@ -51,7 +51,7 @@ def format_metric(value):
     else:
         return str(value)
 
-
+@st.cache_data
 def make_chart(df, signals, start_date, end_date, aggregation_method, location, template='plotly'):
     if aggregation_method == 'Hourly':
         groupby = ['SIGNAL', pd.Grouper(key='TIME2', freq='1H')]
