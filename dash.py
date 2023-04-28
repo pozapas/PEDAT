@@ -315,8 +315,8 @@ def main():
     aggregation_method_selected = st.sidebar.selectbox('**Select aggregation method**', options=aggregation_methods)
 
     # Add a time range slider to select the date range
-    start_date = df['TIME2'].min().date()
-    end_date = df['TIME2'].max().date()
+    start_date = pd.to_datetime('2017-07-01')
+    end_date = pd.to_datetime('2018-07-01')
     start_date_selected, end_date_selected = st.sidebar.select_slider('**Select a date range**', options=pd.date_range(start=start_date, end=end_date, freq='D'), value=(start_date, end_date) , format_func=lambda x: x.strftime('%Y-%m-%d'))
     
     st.markdown(
