@@ -317,7 +317,7 @@ def main():
     # Add a time range slider to select the date range
     start_date = df['TIME2'].min().date()
     end_date = df['TIME2'].max().date()
-    start_date_selected, end_date_selected = st.sidebar.select_slider('**Select a date range**', options=pd.date_range(start=start_date, end=end_date, freq='D'), value=(start_date, end_date))
+    start_date_selected, end_date_selected = st.sidebar.select_slider('**Select a date range**', options=pd.date_range(start=start_date, end=end_date, freq='D'), value=(start_date, end_date) , format_func=lambda x: x.strftime('%Y-%m-%d'))
     
     st.markdown(
         """<style>
