@@ -16,6 +16,7 @@ import datatable as dt
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
 import json
+from statsmodels.tsa.seasonal import seasonal_decompose
 
 # Load the data
 df = pd.read_pickle ("pediN2" + '.pkl', compression='gzip')
