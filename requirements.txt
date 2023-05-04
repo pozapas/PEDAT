@@ -4,4 +4,4 @@ plotly
 pydeck
 datatable
 matplotlib
-pip install fbprophet
+fbprophet
