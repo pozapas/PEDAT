@@ -4,4 +4,4 @@ plotly
 pydeck
 datatable
 matplotlib
-kats
+prophet
