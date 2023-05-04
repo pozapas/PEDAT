@@ -16,7 +16,7 @@ import datatable as dt
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
 import json
-from fbprophet import Prophet
+from darts import TimeSeries
 
 # Load the data
 df = pd.read_pickle ("pediN2" + '.pkl', compression='gzip')
