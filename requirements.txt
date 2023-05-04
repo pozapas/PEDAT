@@ -4,3 +4,4 @@ plotly
 pydeck
 datatable
 matplotlib
+kats
