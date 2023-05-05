@@ -431,11 +431,14 @@ def main():
         </style>
         """, unsafe_allow_html=True)
 
+    st.sidebar.subheader('Dashboard Parameters')
+    form = st.sidebar.form("sidebar")
+
     # Create the locations list based on the modified list of addresses
     locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df[df['ADDRESS'].isin(all_addresses)]['P'].dropna().unique().tolist())]
 
     #locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df['P'].dropna().unique().tolist())]
-    location_selected = st.sidebar.selectbox('**Select approach**', options=locations)
+    location_selected = form.selectbox('**Select approach**', options=locations)
   
     st.markdown(
         """<style>
@@ -448,11 +451,11 @@ def main():
 
     # Add a slider for selecting the aggregation method
     aggregation_methods = ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly']
-    aggregation_method_selected = st.sidebar.selectbox('**Select aggregation method**', options=aggregation_methods)
+    aggregation_method_selected = form.selectbox('**Select aggregation method**', options=aggregation_methods)
 
     # Add a calendar widget to select a date range
-    start_date = st.sidebar.date_input('**Start date**', df['TIME2'].min())
-    end_date = st.sidebar.date_input('**End date**', df['TIME2'].max())
+    start_date = form.date_input('**Start date**', df['TIME2'].min())
+    end_date = form.date_input('**End date**', df['TIME2'].max())
     
     # Convert the date objects to datetime objects
     start_datetime = datetime.combine(start_date, datetime.min.time())
@@ -466,6 +469,8 @@ def main():
     }
         </style>
         """, unsafe_allow_html=True)
+
+    form.form_submit_button("Submit")
 
 
     tab1.subheader('Time series')
