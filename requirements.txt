@@ -4,7 +4,3 @@ plotly
 pydeck
 datatable
 matplotlib
-openai
-statsmodels
-kaleido
-ruptures
