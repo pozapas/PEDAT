@@ -1,5 +1,3 @@
-# PEDAT Dashboard V.0.0.3
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -16,6 +14,20 @@ import datatable as dt
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
 import json
+import kaleido
+from statsmodels.tsa.seasonal import seasonal_decompose
+import ruptures as rpt
+import statsmodels.api as sm
+import statsmodels.api as sm
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.api import VAR
+from statsmodels.tsa.stattools import grangercausalitytests
+import openai
+import io
+
+# Set up OpenAI API credentials
+openai.api_key = "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"
+
 
 # Load the data
 df = pd.read_pickle ("pediN2" + '.pkl', compression='gzip')
@@ -26,7 +38,8 @@ df['TIME2'] = pd.to_datetime(df['TIME2'])
 # Define dataframe for tabular purpose
 df2 = df.groupby([pd.Grouper(key='TIME2', freq='Y'), 'SIGNAL', 'LAT', 'LNG', 'CITY'])['PED'].sum().reset_index()
 df2 = df2.drop('TIME2', axis=1)
-
+df3= pd.read_csv("CW.csv")
+df3.rename(columns={'SIGNAL': 'Signal ID' , 'date':'Timestamp' }, inplace=True)
 
 # Define the title
 title = 'Pedestrian Activity Data Visualization Dashboard'
@@ -341,6 +354,49 @@ def make_map(df, start_date, end_date, signals, aggregation_method, location_sel
     )
     return fig
 
+
+@st.cache_data
+def save_csv(df, selected_signals, start_datetime, end_datetime, location_selected, aggregation_method_selected):
+    # Filter the data based on the selected signals, location, and date range
+    df_filtered2 = df[(df['TIME2'] >= start_datetime) & (df['TIME2'] < end_datetime)]
+    if "All" not in selected_signals:
+        df_filtered2 = df_filtered2[df_filtered2['ADDRESS'].isin(selected_signals)]
+    if location_selected != 'Intersection':
+        phase_num = int(location_selected.split()[1])
+        df_filtered2 = df_filtered2[df_filtered2['P'] == phase_num]
+
+    # Aggregate the data based on the selected aggregation method
+    if aggregation_method_selected == 'Hourly':
+        freq = 'H'
+    elif aggregation_method_selected == 'Daily':
+        freq = 'D'
+    elif aggregation_method_selected == 'Weekly':
+        freq = 'W-MON'
+    elif aggregation_method_selected == 'Monthly':
+        freq = 'MS'
+    elif aggregation_method_selected == 'Yearly':
+        freq = 'YS'
+
+    agg_dict = {col: 'first' for col in df_filtered2.columns if col not in ['PED']}
+    agg_dict['PED'] = 'sum'
+    if location_selected == 'Intersection':
+        groupby_cols = [pd.Grouper(key='TIME2', freq=freq), 'ADDRESS', 'CITY']
+        agg_dict = {col: 'first' for col in df_filtered2.columns if col not in ['PED', 'P']}
+        agg_dict['PED'] = 'sum'
+    else:
+        groupby_cols = [pd.Grouper(key='TIME2', freq=freq), 'ADDRESS', 'CITY', 'P']
+        agg_dict = {col: 'first' for col in df_filtered2.columns if col != 'PED'}
+        agg_dict['PED'] = 'sum'
+
+    df_aggregated = df_filtered2.groupby(groupby_cols).agg(agg_dict)
+    df_aggregated .rename(columns={'ADDRESS': 'Adress' , 'SIGNAL':'Signal ID' , 'TIME2':'Timestamp' , 'PED':'Pedestrian' , 'CITY':'City' , 'P': 'Phase' , 'LAT':'Latitude' , 'LNG': 'Longtitude' }, inplace=True)
+    df_aggregated.reset_index(drop=True, inplace=True)
+    #filename = f"pedestrian_counts_{location_selected}_{aggregation_method_selected}.csv"
+    #st.sidebar.success(f"{filename} successfully saved!")
+    return df_aggregated.to_csv(index=False)
+
+
+
 # Define the Streamlit app
 def main():
     # Set the app title
@@ -350,7 +406,7 @@ def main():
     st.title("Monitoring pedestrian activity in Utah")
     st.markdown(text1)
     st.markdown(text2)
-
+        
     st.markdown("""
             <style>
                .block-container {
@@ -370,8 +426,9 @@ def main():
 
     address = ["All"] + df['ADDRESS'].unique().tolist()
     default_address = [address[1]]
-    #st.multiselect('Address' ,address , default=default_address)
-    selected_signals = st.multiselect('**Signal ID and Location**' , address)
+    #st.multiselect('SIGNAL' ,SIGNAL , default=default_SIGNAL)
+    selected_signals = st.multiselect('**Signal ID and Location**' , address )
+    
     # Add a subtitle to the sidebar
     st.sidebar.markdown(f'[**Singleton Transportation Lab**](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
     font_css = """
@@ -382,7 +439,7 @@ def main():
     </style>
     """
     st.write(font_css, unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["📈 **Chart**", "🗃 **Data**" , "🗺 **Map**"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 **Chart**", "🗃 **Data**" , "🗺 **Map**" , "📊 **Analysis** (Beta)"])
 
     st.markdown(
         """<style>
@@ -401,7 +458,7 @@ def main():
 
     # Add a slider for selecting the location
 
-    # Create a list of all unique values in the 'ADDRESS' column of the DataFrame
+    # Create a list of all unique values in the 'address' column of the DataFrame
     all_addresses = df['ADDRESS'].unique().tolist()
 
     # Check if selected_signals is not empty
@@ -431,11 +488,14 @@ def main():
         </style>
         """, unsafe_allow_html=True)
 
+    st.sidebar.subheader('Dashboard Parameters')
+    form = st.sidebar.form("sidebar")
+
     # Create the locations list based on the modified list of addresses
     locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df[df['ADDRESS'].isin(all_addresses)]['P'].dropna().unique().tolist())]
 
     #locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df['P'].dropna().unique().tolist())]
-    location_selected = st.sidebar.selectbox('**Select approach**', options=locations)
+    location_selected = form.selectbox('**Select approach**', options=locations)
   
     st.markdown(
         """<style>
@@ -448,11 +508,11 @@ def main():
 
     # Add a slider for selecting the aggregation method
     aggregation_methods = ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly']
-    aggregation_method_selected = st.sidebar.selectbox('**Select aggregation method**', options=aggregation_methods)
+    aggregation_method_selected = form.selectbox('**Select aggregation method**', options=aggregation_methods)
 
     # Add a calendar widget to select a date range
-    start_date = st.sidebar.date_input('**Start date**', df['TIME2'].min())
-    end_date = st.sidebar.date_input('**End date**', df['TIME2'].max())
+    start_date = form.date_input('**Start date**', df['TIME2'].min())
+    end_date = form.date_input('**End date**', df['TIME2'].max())
     
     # Convert the date objects to datetime objects
     start_datetime = datetime.combine(start_date, datetime.min.time())
@@ -467,6 +527,7 @@ def main():
         </style>
         """, unsafe_allow_html=True)
 
+    form.form_submit_button("Submit")
 
     tab1.subheader('Time series')
     # Make the time series plot
@@ -493,6 +554,14 @@ def main():
     st.sidebar.markdown(
         """<style>
     div[class*="stDate"] > label > div[data-testid="stMarkdownContainer"] > p {
+        font-size: 16px;
+    }
+        </style>
+        """, unsafe_allow_html=True)
+    
+    st.markdown(
+        """<style>
+    div[class*="stText"] > label > div[data-testid="stMarkdownContainer"] > p {
         font-size: 16px;
     }
         </style>
@@ -524,7 +593,6 @@ def main():
     st.markdown(hide_dataframe_row_index, unsafe_allow_html=True)
     
     tab2.dataframe(table , use_container_width=True)
-
     # Create pivot table
     tab2.subheader('Time series Data')
     pivot_table = table.pivot_table(values='Pedestrian', index='Timestamp', columns='Signal ID', aggfunc='sum')
@@ -537,6 +605,220 @@ def main():
     )
     # Display pivot table
     tab2.dataframe(pivot_table , use_container_width=True)
+    
+    col1 , col2, col3 , col4 , col5= tab4.columns(5)
+
+    if col1.button('Discriptive Statistics'):
+        table['Signal ID'] = table['Signal ID'].astype(str)
+        table['Pedestrian'] = table['Pedestrian'].astype(str)
+        table['Signal ID'] = table['Signal ID'].str.replace(',', '.')
+        table['Pedestrian'] = table['Pedestrian'].str.replace(',', '.')
+        table['Signal ID'] = pd.to_numeric(table['Signal ID'], errors='coerce')
+        table['Pedestrian'] = pd.to_numeric(table['Pedestrian'] , errors='coerce')
+        grouped = table.groupby('Signal ID')['Pedestrian'].describe()
+        missing_counts = table['Pedestrian'].isna().groupby(table['Signal ID']).sum()
+        grouped['Missing Count'] = missing_counts
+        DS = grouped.to_csv(index=True)
+        tab4.download_button(
+        label="📥 Download",
+        data=DS,
+        file_name="DiscriptiveStat.csv",
+        mime='text/csv',)
+        tab4.dataframe(grouped , use_container_width=True)
+
+   
+    if col2.button('Box Plot'):
+        signal_ids = table['Signal ID'].unique() 
+        fig = go.Figure()
+
+        # Specify a color scale for the plot
+        color_scale = px.colors.qualitative.Pastel
+
+        for signal_id, group in table.groupby('Signal ID'):
+            if signal_id in signal_ids:
+                fig.add_trace(go.Box(y=group['Pedestrian'], name=f'{signal_id}', marker=dict(color=color_scale[signal_id % len(color_scale)])))
+
+        fig.update_layout(yaxis_title='Pedestrian', xaxis_title='Signal ID')
+        fig.update_layout(xaxis=dict(title='Signal ID', type='category', tickmode='array', tickvals=signal_ids,
+                                    ticktext=[str(signal_id) for signal_id in signal_ids]))
+
+        fig.write_image('BoxPlot.jpg', format='jpg', width=1200, height=800, scale=3)
+        with open('BoxPlot.jpg', 'rb') as f:
+            data = f.read()
+
+        tab4.download_button(
+            label="📥 Download Plot",
+            data=data,
+            file_name="BoxPlot.jpg",
+            mime='jpg',)
+        tab4.plotly_chart(fig, theme='streamlit', use_container_width=True)
+    
+
+    if col3.button('Decomposition'):
+        table = make_table(df, selected_signals, start_datetime, end_datetime, 'Daily', location_selected)
+        colors = ['blue', 'green', 'red', 'orange', 'purple', 'brown', 'turquoise', 'pink', 'gray', 'olive', 'yellow', 'black', 'white', 'magenta', 'teal', 'maroon', 'navy', 'lavender', 'gold', 'silver', 'beige', 'coral', 'crimson', 'emerald', 'fuchsia', 'indigo', 'ivory', 'khaki', 'lemon', 'mint', 'peach', 'rose', 'rust', 'salmon', 'sky blue', 'tan', 'violet', 'wheat', 'chartreuse']
+        # Get unique Signal IDs
+        signal_ids = table['Signal ID'].unique()
+        table.set_index('Timestamp', inplace=True)
+
+        for i,signal_id in enumerate(signal_ids):
+            # Filter data by Signal ID
+            table_filtered = table[table['Signal ID'] == signal_id]
+            # Replace comma with dot in Pedestrian column
+            table_filtered['Pedestrian'] = table_filtered['Pedestrian'].str.replace(',', '.').astype(float)
+            result_add = seasonal_decompose(table_filtered['Pedestrian'], model='add', period=12)
+
+            # Create a Plotly figure for seasonal component
+            fig_seasonal = go.Figure()
+            fig_seasonal.add_trace(go.Scatter(x=table_filtered.index, y=result_add.seasonal, name='Seasonal Component',
+                                          line=dict(color=colors[i])))
+
+            fig_seasonal.update_layout(title=f'Signal ID: {signal_id} - Seasonal Component Plot',
+                                    xaxis_title='Timestamp',
+                                    yaxis_title='Value')
+
+            # Create a Plotly figure for trend component
+            fig_trend = go.Figure()
+            fig_trend.add_trace(go.Scatter(x=table_filtered.index, y=result_add.trend, name='Trend Component',
+                                          line=dict(color=colors[i])))
+
+            fig_trend.update_layout(title=f'Signal ID: {signal_id} - Trend Component Plot',
+                                    xaxis_title='Timestamp',
+                                    yaxis_title='Value')
+
+            # Create a Plotly figure for residual component
+            fig_resid = go.Figure()
+            fig_resid.add_trace(go.Scatter(x=table_filtered.index, y=result_add.resid, name='Residual Component',
+                                          line=dict(color=colors[i])))
+
+            fig_resid.update_layout(title=f'Signal ID: {signal_id} - Residual Component Plot',
+                                    xaxis_title='Timestamp',
+                                    yaxis_title='Value')
+
+            # Display the Plotly figures in Streamlit
+            tab4.plotly_chart(fig_seasonal, use_container_width=True)
+            tab4.plotly_chart(fig_trend, use_container_width=True)
+            tab4.plotly_chart(fig_resid, use_container_width=True)
+
+    st.sidebar.subheader('Analysis Parameters')
+    with st.sidebar.form("Analysis Parameters"):
+        weather_variable = st.multiselect('Weather Components', ['High Temp', 'Low Temp', 'Precipitation'] , default= ['High Temp', 'Low Temp', 'Precipitation'])
+        change_detection_method = st.selectbox('Change Detection Method', ['Binary', 'Bottom-Up', 'Dynamic' , 'Window Sliding'])
+        model_method_mapping = {
+            'Least absolute deviation': 'l1',
+            'Least squared deviation_2': 'l2',
+            'Gaussian process change': 'normal',
+            'Kernelized mean change': 'rbf',
+            'Autoregressive model change': 'ar'
+        }
+        selected_method = st.selectbox('Change Detection Cost Function', list(model_method_mapping.keys()))
+        n_bkps = st.text_input('Number of Breakpoints', '4')
+        n_bkps = int(n_bkps)
+         # Every form must have a submit button.
+        st.form_submit_button("Submit")
+
+    if col4.button('Multivariate Analysis'):
+            table = make_table(df, selected_signals, start_datetime, end_datetime, 'Daily', location_selected)
+            table = pd.merge(table, df3[['Signal ID'] + weather_variable], on='Signal ID')
+            # Get unique Signal IDs
+            signal_ids = table['Signal ID'].unique()
+            table.set_index('Timestamp', inplace=True)
+
+            for i,signal_id in enumerate(signal_ids):
+                # Filter data by Signal ID
+                table_filtered = table[table['Signal ID'] == signal_id]
+                # Replace comma with dot in Pedestrian column
+                table_filtered['Pedestrian'] = table_filtered['Pedestrian'].str.replace(',', '.').astype(float)
+                multivariate = pd.concat([table_filtered['Pedestrian']] + [table_filtered[var] for var in weather_variable], axis=1)
+                model = VAR(multivariate)
+                results = model.fit(maxlags=10, ic='aic')
+                # Specify the order of the VAR model (p)
+                p = 2
+
+                # Fit the VAR model
+                model2 = sm.tsa.VAR(multivariate)
+                results2 = model2.fit(p)
+                #summary_text = str(results2.summary())
+                tab4.subheader('Results of Vector Autoregression (VAR) model')
+                tab4.text(results2.summary())
+             
+                # Capture the output of the results.summary() method in a string variable
+                summary_text = str(results2.summary())
+
+                # Create a prompt that describes the output and asks for help interpreting it
+                prompt = f"I ran a VAR model using statsmodels and got the following results:\n{summary_text}\nCan you interpret the results in details?"
+
+                # Use the openai.Completion function to generate text based on the prompt
+                response = openai.Completion.create(
+                    engine="text-davinci-003",
+                    prompt=prompt,
+                    max_tokens=1024,
+                    n=1,
+                    stop=None,
+                    temperature=0.7,
+                )
+
+                # Extract the generated text from the response and print it
+                interpretation = response.choices[0].text
+                tab4.subheader('Results interpretation (AI generated)')
+                tab4.markdown(interpretation) 
+
+                # Create the impulse response plot
+                irf = results.irf(10)
+                fig = irf.plot(orth=True)
+
+                # Set the background color of the entire figure
+                fig.set_facecolor('black')
+                fig.set_dpi(50)
+
+                # Set the font color of the tick marks and axis labels
+                for ax in fig.axes:
+                    ax.tick_params(colors='white')
+                    ax.xaxis.label.set_color('white')
+                    ax.yaxis.label.set_color('white')
+                    ax.title.set_color('white') # Set the title color to white
+                # Set the font color of the title
+                fig.suptitle(f'Impulse Response Function (orthogonalized) - Signal ID: {signal_id}', fontsize=10, fontweight='bold', color='white')
+                # Display the figures
+                tab4.subheader('Impulse Response Function')
+                tab4.pyplot(fig , use_container_width=False )
+
+    st.markdown("""
+            <style>
+            .big-font {
+                font-size:16px !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+
+   
+    if col5.button('Detect Change Points'):
+            #table = make_table(df, selected_signals, start_datetime, end_datetime, 'Weekly', location_selected)
+            model_method = model_method_mapping[selected_method]
+            signal_ids = table['Signal ID'].unique()
+            table.set_index('Timestamp', inplace=True)
+            table['Pedestrian'] = table['Pedestrian'].str.replace(',', '.').astype(float)
+            colors = ['blue', 'green', 'red', 'orange', 'purple', 'brown', 'turquoise', 'pink', 'gray', 'olive', 'yellow', 'black', 'white', 'magenta', 'teal', 'maroon', 'navy', 'lavender', 'gold', 'silver', 'beige', 'coral', 'crimson', 'emerald', 'fuchsia', 'indigo', 'ivory', 'khaki', 'lemon', 'mint', 'peach', 'rose', 'rust', 'salmon', 'sky blue', 'tan', 'violet', 'wheat', 'chartreuse']
+            for i,signal_id in enumerate(signal_ids):
+                    signal = table.query("`Signal ID` == @signal_id")['Pedestrian'].values
+                    if change_detection_method == 'Binary':
+                        algo = rpt.Binseg(model=model_method).fit(signal)
+                    elif change_detection_method == 'Bottom-Up':
+                        algo = rpt.BottomUp(model=model_method).fit(signal)
+                    elif change_detection_method == 'Window Sliding':
+                        algo = rpt.Window(model=model_method).fit(signal)
+                    elif change_detection_method == 'Dynamic':
+                        algo = rpt.Dynp(model=model_method).fit(signal)
+                    result = algo.predict(n_bkps=n_bkps)
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=table.index, y=signal, mode='lines', name='Pedestrian',line=dict(color=colors[i])))
+                    for cp in result:
+                        if cp < len(table.index) - 1:
+                            fig.add_shape(type='line', x0=table.index[cp], y0=0, x1=table.index[cp], y1=max(signal), line=dict(color='red', width=1))
+                    fig.update_layout(title=f'Signal ID: {signal_id} - Pedestrian Time Series with Change Points ({change_detection_method}, {n_bkps} breakpoints)', xaxis_title='Timestamp', yaxis_title='Pedestrian')
+                    tab4.plotly_chart(fig, use_container_width=True)
+
 
     expander = st.expander("**How to use**")
     expander.write('''
@@ -560,7 +842,7 @@ def main():
     }
         </style>
         """, unsafe_allow_html=True)
-   
+    #csv = save_csv(df, selected_signals, start_datetime, end_datetime, location_selected, aggregation_method_selected)
 
     hide_menu_style = """
         <style>
