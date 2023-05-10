@@ -388,8 +388,9 @@ def main():
     Draw(
         export=False,
         draw_options={
-        'rectangle': {},
-        'polygon': {}).add_to(m)
+            'rectangle': {},
+            'polygon': {},
+        }).add_to(m)
 
     # Create an empty list to hold the selected addresses
     address= []
