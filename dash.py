@@ -1,4 +1,4 @@
-# PEDAT Dashboard V.0.0.3
+# PEDAT Dashboard V.0.0.4
 
 import streamlit as st
 import pandas as pd
@@ -16,6 +16,11 @@ import datatable as dt
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
 import json
+import folium
+from streamlit_folium import st_folium
+from folium.plugins import Draw
+from shapely.geometry import Polygon, Point
+
 
 # Load the data
 df = pd.read_pickle ("pediN2" + '.pkl', compression='gzip')
@@ -368,10 +373,80 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    address = ["All"] + df['ADDRESS'].unique().tolist()
-    default_address = [address[1]]
+    a = ["All"] + df['ADDRESS'].unique().tolist()
+    default_address = [a[1]]
     #st.multiselect('Address' ,address , default=default_address)
-    selected_signals = st.multiselect('**Signal ID and Location**' , address)
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["🚦 **Select Signal**" ,"📈 **Chart**", "🗃 **Data**" , "🗺 **Map**"])
+    # Load your DataFrame
+    df3 = df.groupby([pd.Grouper(key='SIGNAL'), 'ADDRESS', 'LAT', 'LNG'])['PED'].sum().reset_index() 
+    df3.rename(columns={'LNG': 'LON' }, inplace=True)
+    icon_image = 'R-min.png'
+    icon_size = (25, 25)
+    tab1.write ("**Please select a Signal ID and location from the Map or the list**")
+    # Create the map object
+    m = folium.Map(location=[df3['LAT'].mean(), df3['LON'].mean()], zoom_start=12 , tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map')
+    Draw(
+        export=False,
+        filename="my_data.geojson",
+        position="topleft",
+        draw_options={
+            'circle': False,
+            'circlemarker':False,
+            'polyline' : False
+            
+        }
+        
+    ).add_to(m)
+
+    with tab1:
+        # Create an empty list to hold the selected addresses
+        address= []
+
+        # Add a marker for each location in the DataFrame
+        for index, row in df3.iterrows():
+            folium.Marker(location=(row['LAT'], row['LON']), popup=folium.Popup(row['ADDRESS'], max_width=300,min_width=150),
+            tooltip= row['ADDRESS'], icon=folium.CustomIcon(icon_image, icon_size)).add_to(m)
+            
+        # Render the map using st_folium
+        s = st_folium(m, width='80%', height=400 , returned_objects=["last_object_clicked", "last_active_drawing"])
+        # Check if the JSON object is not None
+        if s is not None and "last_object_clicked" in s and s["last_object_clicked"] is not None:
+            json_obj = s["last_object_clicked"]
+            lat = json_obj["lat"]
+            lng = json_obj["lng"]
+
+
+            # Filter the dataframe based on the lat and lng values
+            filtered_df = df3[(df3['LAT'] == lat) & (df3['LON'] == lng)]
+
+            # Print the 'ADDRESS' value for each row in the filtered dataframe
+            for index, row in filtered_df.iterrows():
+                address.append(row['ADDRESS'])
+            
+            a = ["All"] + df['ADDRESS'].unique().tolist()
+            selected_signals = tab1.multiselect('**Signal ID and Location**', a , default = address)
+        
+        elif s is not None and "last_active_drawing" in s and s["last_active_drawing"] is not None:
+            # A polygon has been drawn on the map
+            polygon_coords = s["last_active_drawing"]["geometry"]["coordinates"]
+            polygon = Polygon(polygon_coords[0])
+
+            # Create an empty list to hold the selected addresses
+            selected_addresses = []
+
+            # Iterate through each row of the dataframe and check if its address falls within the polygon
+            for index, row in df3.iterrows():
+                point = Point(row['LON'], row['LAT'])
+                if polygon.contains(point):
+                    selected_addresses.append(row['ADDRESS'])
+
+            a = ["All"] + df['ADDRESS'].unique().tolist()
+            selected_signals = tab1.multiselect('**Signal ID and Location**', a, default=selected_addresses)
+        else:
+            
+            selected_signals = tab1.multiselect('**Signal ID and Location**', a , default = address)
+
     # Add a subtitle to the sidebar
     st.sidebar.markdown(f'[**Singleton Transportation Lab**](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
     font_css = """
@@ -382,8 +457,7 @@ def main():
     </style>
     """
     st.write(font_css, unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["📈 **Chart**", "🗃 **Data**" , "🗺 **Map**"])
-
+    
     st.markdown(
         """<style>
     div[class*="stMultiSelect"] > label > div[data-testid="stMarkdownContainer"] > p {
@@ -473,26 +547,26 @@ def main():
     form.form_submit_button("Submit")
 
 
-    tab1.subheader('Time series')
+    tab2.subheader('Time series')
     # Make the time series plot
     fig = make_chart(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected, template='plotly_dark')
-    tab1.plotly_chart(fig, theme='streamlit', use_container_width=True )
+    tab2.plotly_chart(fig, theme='streamlit', use_container_width=True )
 
-    tab1.subheader('Hourly Pedestrian Activity')
-    tab1.plotly_chart(make_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
+    tab2.subheader('Hourly Pedestrian Activity')
+    tab2.plotly_chart(make_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
 
-    tab1.subheader('Daily Pedestrian Activity')
-    tab1.plotly_chart(make_bar_chart2(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
+    tab2.subheader('Daily Pedestrian Activity')
+    tab2.plotly_chart(make_bar_chart2(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
 
-    tab1.subheader('Pedestrian Activity in relation to Signal and City')
+    tab2.subheader('Pedestrian Activity in relation to Signal and City')
     # Add a pie chart to show pedestrian activity by signal
-    tab1.plotly_chart(make_pie_and_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
+    tab2.plotly_chart(make_pie_and_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
 
-    tab3.subheader('Pedestrian Activity by Location')
+    tab4.subheader('Pedestrian Activity by Location')
     # Make the map
     #fig = make_map(df, start_date_selected, end_date_selected , selected_signals , location_selected, aggregation_method_selected)
     fig = make_map(df, start_datetime, end_datetime , selected_signals , aggregation_method_selected , location_selected)
-    tab3.pydeck_chart(fig)
+    tab4.pydeck_chart(fig)
 
 
     st.sidebar.markdown(
@@ -505,13 +579,13 @@ def main():
 
 
     # Filter your data based on the selected date range
-    tab2.subheader('Pedestrian Activity Data')
+    tab3.subheader('Pedestrian Activity Data')
     
     # Display the filtered data in a table
     
     table = make_table(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected)
     cc = table.to_csv(index=False)
-    tab2.download_button(
+    tab3.download_button(
         label="📥 Download",
         data=cc,
         file_name="FilteredData.csv",
@@ -528,20 +602,20 @@ def main():
     # Inject CSS with Markdown
     st.markdown(hide_dataframe_row_index, unsafe_allow_html=True)
     
-    tab2.dataframe(table , use_container_width=True)
+    tab3.dataframe(table , use_container_width=True)
 
     # Create pivot table
-    tab2.subheader('Time series Data')
+    tab3.subheader('Time series Data')
     pivot_table = table.pivot_table(values='Pedestrian', index='Timestamp', columns='Signal ID', aggfunc='sum')
     cv = pivot_table.to_csv(index=True)
-    tab2.download_button(
+    tab3.download_button(
         label="📥 Download",
         data=cv,
         file_name="TimeSeries.csv",
         mime='text/csv',
     )
     # Display pivot table
-    tab2.dataframe(pivot_table , use_container_width=True)
+    tab3.dataframe(pivot_table , use_container_width=True)
 
     expander = st.expander("**How to use**")
     expander.write('''
