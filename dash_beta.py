@@ -387,10 +387,16 @@ def main():
     m = folium.Map(location=[df3['LAT'].mean(), df3['LON'].mean()], zoom_start=12 , tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map')
     Draw(
         export=False,
+        filename="my_data.geojson",
+        position="topleft",
         draw_options={
-            'rectangle': {},
-            'polygon': {},
-        }).add_to(m)
+            'circle': False,
+            'circlemarker':False,
+            'polyline' : False
+            
+        }
+        
+    ).add_to(m)
 
     # Create an empty list to hold the selected addresses
     address= []
