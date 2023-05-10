@@ -6,3 +6,4 @@ datatable
 matplotlib
 folium
 streamlit_folium
+shapely
