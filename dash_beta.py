@@ -16,6 +16,11 @@ import datatable as dt
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
 import json
+import folium
+from streamlit_folium import st_folium
+from folium.plugins import Draw
+from shapely.geometry import Polygon, Point
+
 
 # Load the data
 df = pd.read_pickle ("pediN2" + '.pkl', compression='gzip')
@@ -368,10 +373,68 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    address = ["All"] + df['ADDRESS'].unique().tolist()
-    default_address = [address[1]]
+    a = ["All"] + df['ADDRESS'].unique().tolist()
+    default_address = [a[1]]
     #st.multiselect('Address' ,address , default=default_address)
-    selected_signals = st.multiselect('**Signal ID and Location**' , address)
+    
+
+    # Load your DataFrame
+    df3 = df.groupby([pd.Grouper(key='SIGNAL'), 'ADDRESS', 'LAT', 'LNG'])['PED'].sum().reset_index() 
+    df3.rename(columns={'LNG': 'LON' }, inplace=True)
+    icon_image = 'R-min.png'
+    icon_size = (25, 25)
+    # Create the map object
+    m = folium.Map(location=[df3['LAT'].mean(), df3['LON'].mean()], zoom_start=12 , tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map')
+    Draw(
+        export=False).add_to(m)
+
+    # Create an empty list to hold the selected addresses
+    address= []
+
+    # Add a marker for each location in the DataFrame
+    for index, row in df3.iterrows():
+        folium.Marker(location=(row['LAT'], row['LON']), popup=folium.Popup(row['ADDRESS'], max_width=300,min_width=150),
+        tooltip= row['ADDRESS'], icon=folium.CustomIcon(icon_image, icon_size)).add_to(m)
+        
+    # Render the map using st_folium
+    s = st_folium(m, width='80%', height=400 , returned_objects=["last_object_clicked", "last_active_drawing"])
+    # Check if the JSON object is not None
+    if s is not None and "last_object_clicked" in s and s["last_object_clicked"] is not None:
+        json_obj = s["last_object_clicked"]
+        lat = json_obj["lat"]
+        lng = json_obj["lng"]
+
+
+        # Filter the dataframe based on the lat and lng values
+        filtered_df = df3[(df3['LAT'] == lat) & (df3['LON'] == lng)]
+
+        # Print the 'ADDRESS' value for each row in the filtered dataframe
+        for index, row in filtered_df.iterrows():
+            address.append(row['ADDRESS'])
+        
+        a = ["All"] + df['ADDRESS'].unique().tolist()
+        selected_signals = st.multiselect('**Signal ID and Location**', a , default = address)
+    
+    elif s is not None and "last_active_drawing" in s and s["last_active_drawing"] is not None:
+        # A polygon has been drawn on the map
+        polygon_coords = s["last_active_drawing"]["geometry"]["coordinates"]
+        polygon = Polygon(polygon_coords[0])
+
+        # Create an empty list to hold the selected addresses
+        selected_addresses = []
+
+        # Iterate through each row of the dataframe and check if its address falls within the polygon
+        for index, row in df3.iterrows():
+            point = Point(row['LON'], row['LAT'])
+            if polygon.contains(point):
+                selected_addresses.append(row['ADDRESS'])
+
+        a = ["All"] + df['ADDRESS'].unique().tolist()
+        selected_signals = st.multiselect('**Signal ID and Location**', a, default=selected_addresses)
+    else:
+        st.write ("**Please select a Signal ID and location from the Map or the list**")
+        selected_signals = st.multiselect('**Signal ID and Location**', a , default = address)
+
     # Add a subtitle to the sidebar
     st.sidebar.markdown(f'[**Singleton Transportation Lab**](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
     font_css = """
