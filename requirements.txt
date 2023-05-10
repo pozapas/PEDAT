@@ -4,3 +4,6 @@ plotly
 pydeck
 datatable
 matplotlib
+folium
+streamlit_folium
+shapely
