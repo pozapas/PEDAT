@@ -383,6 +383,7 @@ def main():
     df3.rename(columns={'LNG': 'LON' }, inplace=True)
     icon_image = 'R-min.png'
     icon_size = (25, 25)
+    st.write ("**Please select a Signal ID and location from the Map or the list**")
     # Create the map object
     m = folium.Map(location=[df3['LAT'].mean(), df3['LON'].mean()], zoom_start=12 , tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map')
     Draw(
@@ -442,7 +443,6 @@ def main():
         a = ["All"] + df['ADDRESS'].unique().tolist()
         selected_signals = st.multiselect('**Signal ID and Location**', a, default=selected_addresses)
     else:
-        st.write ("**Please select a Signal ID and location from the Map or the list**")
         selected_signals = st.multiselect('**Signal ID and Location**', a , default = address)
 
     # Add a subtitle to the sidebar
