@@ -4,6 +4,5 @@ plotly
 pydeck
 datatable
 matplotlib
-json
 folium
 streamlit_folium
