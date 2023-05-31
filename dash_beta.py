@@ -1,4 +1,4 @@
-# PEDAT Dashboard V.0.0.3
+# PEDAT Dashboard V.0.0.4
 
 import streamlit as st
 import pandas as pd
@@ -20,17 +20,27 @@ import folium
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 from shapely.geometry import Polygon, Point
+from google.cloud import bigquery
+from google.oauth2 import service_account
+from folium.plugins import MarkerCluster
 
 
-# Load the data
-df = pd.read_pickle ("pediN2" + '.pkl', compression='gzip')
+# Create API client.
+credentials = service_account.Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"]
+)
+client = bigquery.Client(credentials=credentials)
 
-# Convert TIME2 to a datetime format
-df['TIME2'] = pd.to_datetime(df['TIME2'])
-
-# Define dataframe for tabular purpose
-df2 = df.groupby([pd.Grouper(key='TIME2', freq='Y'), 'SIGNAL', 'LAT', 'LNG', 'CITY'])['PED'].sum().reset_index()
-df2 = df2.drop('TIME2', axis=1)
+# Define SQL query to retrieve the data from BigQuery
+sql_query = """
+SELECT *
+FROM `decent-digit-387716.pedat_dataset.map_data`
+"""
+sql_query2 = """
+SELECT *
+FROM `decent-digit-387716.pedat_dataset.pedatutah`
+WHERE ADDRESS IN UNNEST(@selected_signals)
+"""
 
 
 # Define the title
@@ -39,10 +49,10 @@ text1 = 'This website provides data and visualizations of pedestrian activity (a
 text2 = 'Data are derived from pedestrian push-button presses at traffic signals, taken from the Utah Department of Transportation\'s [Automated Traffic Signal Performance Measures System](https://udottraffic.utah.gov/atspm/) website. We hope that this information is useful for public agencies to track changes in walking activity at different locations.'
 
 # Define the x and y axis labels
-x_axis_label = 'TIME2'
+x_axis_label = 'TIME1'
 y_axis_label = 'PED'
 
-@st.cache_data
+@st.cache_resource
 def format_metric(value):
     # Check if the value is greater than or equal to 1 billion
     if value >= 1e9:
@@ -60,18 +70,18 @@ def format_metric(value):
     else:
         return str(value)
 
-@st.cache_data
+@st.cache_resource
 def make_chart(df, signals, start_date, end_date, aggregation_method, location, template='plotly'):
     if aggregation_method == 'Hourly':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1H')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1H')]
     elif aggregation_method == 'Daily':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1D')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1D')]
     elif aggregation_method == 'Weekly':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1W')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1W')]
     elif aggregation_method == 'Monthly':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1M')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1M')]
     elif aggregation_method == 'Yearly':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1Y')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1Y')]
 
     if location == 'Intersection':
         filter_val = 'all'
@@ -81,7 +91,7 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
         col = 'P'
 
     # Filter the dataframe by the selected signals and date range
-    df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] <= end_date) & (df['ADDRESS'].isin(signals))]
+    df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
 
     # Aggregate the data
     if location == 'Intersection':
@@ -92,10 +102,10 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
     # Create the line chart
     if aggregation_method == 'Hourly':
         x_axis_label = 'Time'
-        fig = px.line(df_agg, x='TIME2', y='PED' ,  color='ADDRESS', template=template)
+        fig = px.line(df_agg, x='TIME1', y='PED' ,  color='ADDRESS', template=template)
     else:
         x_axis_label = 'Date'
-        fig = px.line(df_agg, x='TIME2', y='PED', color='ADDRESS', template=template)
+        fig = px.line(df_agg, x='TIME1', y='PED', color='ADDRESS', template=template)
 
     fig.update_xaxes(title_text=x_axis_label)
     fig.update_yaxes(title_text='Pedestrian Estimated')
@@ -124,18 +134,18 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
     return fig
 
 
-@st.cache_data
+@st.cache_resource
 def make_table(df, signals, start_date, end_date, aggregation_method, location):
     if aggregation_method == 'Hourly':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1H')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1H')]
     elif aggregation_method == 'Daily':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1D')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1D')]
     elif aggregation_method == 'Weekly':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1W')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1W')]
     elif aggregation_method == 'Monthly':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1M')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1M')]
     elif aggregation_method == 'Yearly':
-        groupby = ['ADDRESS', pd.Grouper(key='TIME2', freq='1Y')]
+        groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1Y')]
 
     if location == 'Intersection':
         filter_val = 'all'
@@ -145,7 +155,7 @@ def make_table(df, signals, start_date, end_date, aggregation_method, location):
         col = 'P'
 
     # Filter the dataframe by the selected signals and date range
-    df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] <= end_date) & (df['ADDRESS'].isin(signals))]
+    df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
 
     # Aggregate the data
     if location == 'Intersection':
@@ -154,7 +164,7 @@ def make_table(df, signals, start_date, end_date, aggregation_method, location):
         df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby(groupby).agg({'PED': 'sum', 'P': 'first', 'CITY': 'first', 'SIGNAL': 'first' , 'LAT': 'first' , 'LNG': 'first'}).reset_index()
 
     df_agg['PED'] = df_agg['PED'].apply(lambda x: '{:,.0f}'.format(x))
-    df_agg.rename(columns={'SIGNAL': 'Signal ID' , 'TIME2':'Timestamp' , 'PED':'Pedestrian' , 'CITY':'City' , 'P': 'Phase' , 'LAT':'Latitude' , 'LNG': 'Longtitude' }, inplace=True)
+    df_agg.rename(columns={'SIGNAL': 'Signal ID' , 'TIME1':'Timestamp' , 'PED':'Pedestrian' , 'CITY':'City' , 'P': 'Phase' , 'LAT':'Latitude' , 'LNG': 'Longtitude' }, inplace=True)
     # Select the columns to display in the output table
     if 'Phase' in df_agg.columns:
         df_agg = df_agg[['Signal ID', 'Timestamp', 'Phase', 'Pedestrian', 'City' , 'Latitude' , 'Longtitude']]
@@ -162,12 +172,11 @@ def make_table(df, signals, start_date, end_date, aggregation_method, location):
         df_agg = df_agg[['Signal ID', 'Timestamp', 'Pedestrian', 'City' , 'Latitude' , 'Longtitude']]
 
     df_agg.reset_index(drop=True, inplace=True)  # remove index column
+    df_agg['Timestamp'] = df_agg['Timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
     return df_agg
 
-
-
 # Using treemap
-@st.cache_data
+@st.cache_resource
 def make_pie_and_bar_chart(df, signals, start_date, end_date, location):
 
     if location == 'Intersection':
@@ -178,7 +187,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location):
         col = 'P'
 
     # Filter the dataframe by the selected signals and date range
-    df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] <= end_date) & (df['ADDRESS'].isin(signals))]
+    df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
 
     # Aggregate the data
     if location == 'Intersection':
@@ -211,7 +220,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location):
     
     return fig_combined
 
-@st.cache_data
+@st.cache_resource
 def make_bar_chart(df, signals, start_date, end_date, location):
 
     if location == 'Intersection':
@@ -222,32 +231,32 @@ def make_bar_chart(df, signals, start_date, end_date, location):
         col = 'P'
 
     # Filter the dataframe by the selected signals and date range
-    df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] <= end_date) & (df['ADDRESS'].isin(signals))]
+    df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
 
     # Aggregate the data
     if location == 'Intersection':
-        df_agg = df_filtered.groupby('TIME2').agg({'PED': 'sum'}).reset_index()
+        df_agg = df_filtered.groupby('TIME1').agg({'PED': 'sum'}).reset_index()
     else:
-        df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby('TIME2').agg({'PED': 'sum'}).reset_index()
+        df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby('TIME1').agg({'PED': 'sum'}).reset_index()
 
     
-    # Convert the "TIME2" column to hour values
-    df_agg['TIME2'] = pd.to_datetime(df_agg['TIME2']).dt.hour
+    # Convert the "TIME1" column to hour values
+    df_agg['TIME1'] = pd.to_datetime(df_agg['TIME1']).dt.hour
     
     # Aggregate the data by hour and sum the pedestrian counts
-    df_agg2 = df_agg.groupby('TIME2').agg({'PED': 'sum'}).reset_index()
+    df_agg2 = df_agg.groupby('TIME1').agg({'PED': 'sum'}).reset_index()
     
     # Calculate the hourly average by dividing the sum of PED by number of days/hours
     df_agg2['PED'] = df_agg2['PED'] / 24
     
     # Create the bar chart
-    fig_bar = go.Figure(data=[go.Bar(x=df_agg2['TIME2'], y=df_agg2['PED'], showlegend=False)])
+    fig_bar = go.Figure(data=[go.Bar(x=df_agg2['TIME1'], y=df_agg2['PED'], showlegend=False)])
     fig_bar.update_layout(xaxis_title='Hour', yaxis_title='Pedestrian Count', showlegend=False, xaxis=dict(tickmode='linear', dtick=1))
     fig_bar.update_yaxes(tickformat=".0f")
     
     return fig_bar
 
-@st.cache_data
+@st.cache_resource
 def make_bar_chart2(df, signals, start_date, end_date, location):
 
     if location == 'Intersection':
@@ -258,19 +267,19 @@ def make_bar_chart2(df, signals, start_date, end_date, location):
         col = 'P'
 
     # Filter the dataframe by the selected signals and date range
-    df_filtered = df[(df['TIME2'] >= start_date) & (df['TIME2'] <= end_date) & (df['ADDRESS'].isin(signals))]
+    df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
 
     # Aggregate the data
     if location == 'Intersection':
-        df_agg = df_filtered.groupby('TIME2').agg({'PED': 'sum'}).reset_index()
+        df_agg = df_filtered.groupby('TIME1').agg({'PED': 'sum'}).reset_index()
     else:
-        df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby('TIME2').agg({'PED': 'sum'}).reset_index()
+        df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby('TIME1').agg({'PED': 'sum'}).reset_index()
 
-    # Convert the "TIME2" column to day of the week values (0-6, where Monday=0 and Sunday=6)
-    df_agg['TIME2'] = pd.to_datetime(df_agg['TIME2']).dt.dayofweek
+    # Convert the "TIME1" column to day of the week values (0-6, where Monday=0 and Sunday=6)
+    df_agg['TIME1'] = pd.to_datetime(df_agg['TIME1']).dt.dayofweek
 
     # Aggregate the data by day of the week and calculate the average pedestrian counts
-    df_agg2 = df_agg.groupby('TIME2').agg({'PED': 'sum'}).reset_index()
+    df_agg2 = df_agg.groupby('TIME1').agg({'PED': 'sum'}).reset_index()
 
     # Calculate the hourly average by dividing the sum of PED by number of days/hours
     df_agg2['PED'] = df_agg2['PED'] / 7
@@ -279,7 +288,7 @@ def make_bar_chart2(df, signals, start_date, end_date, location):
     df_agg2['PED'] = df_agg2['PED'].round(2)
 
     # Create the bar chart
-    fig_bar = go.Figure(data=[go.Bar(x=df_agg2['TIME2'], y=df_agg2['PED'], showlegend=False)])
+    fig_bar = go.Figure(data=[go.Bar(x=df_agg2['TIME1'], y=df_agg2['PED'], showlegend=False)])
 
     # Set the x-axis tick labels to the full names of the days of the week
     fig_bar.update_layout(xaxis_title='Day of the Week', yaxis_title='Pedestrian Count', showlegend=False)
@@ -288,10 +297,10 @@ def make_bar_chart2(df, signals, start_date, end_date, location):
 
     return fig_bar
 
-#@st.cache_data
+@st.cache_resource
 def make_map(df, start_date, end_date, signals, aggregation_method, location_selected):
     # Filter by date, selected signals, and location
-    mask = (df['TIME2'] >= start_date) & (df['TIME2'] < end_date) & (df['ADDRESS'].isin(signals))
+    mask = (df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] < pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))
     if location_selected == 'Intersection':
         mask &= df['P'] >= 0  # include all values of P for intersections
     else:
@@ -313,44 +322,27 @@ def make_map(df, start_date, end_date, signals, aggregation_method, location_sel
     aggregation_function = agg_functions[aggregation_method]
     # Aggregate by location
     if location_selected == 'Intersection':
-        df_agg = df_filtered.groupby(['LAT', 'LNG', 'ADDRESS', 'CITY']).agg({'PED': aggregation_function}).reset_index()
+        df_agg = df_filtered.groupby(['LAT', 'LNG', 'ADDRESS', 'CITY' , 'SIGNAL']).agg({'PED': aggregation_function}).reset_index()
     else:
-        df_agg = df_filtered.groupby(['LAT', 'LNG', 'ADDRESS', 'CITY', 'P']).agg({'PED': aggregation_function}).reset_index()
+        df_agg = df_filtered.groupby(['LAT', 'LNG', 'ADDRESS', 'CITY', 'P' , 'SIGNAL']).agg({'PED': aggregation_function}).reset_index()
 
+    px.set_mapbox_access_token("pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg")
     # Create the HeatmapLayer
-    heatmap_layer = pdk.Layer(
-        'HeatmapLayer',
-        data=df_agg,
-        get_position='[LNG, LAT]',
-        auto_highlight=True,
-        radius=50,
-        opacity=0.8,
-        get_weight='PED'
-    )
-
-    # Set the viewport location
-    view_state = pdk.ViewState(
-        longitude=df['LNG'].mean(),
-        latitude=df['LAT'].mean(),
-        zoom=10,
-        #min_zoom=5,
-        #max_zoom=15,
-        #pitch=10.5,
-        #bearing=-27.36
-    )
-    fig = pdk.Deck(
-        map_style='mapbox://styles/mapbox/light-v11',
-        initial_view_state=view_state,
-        layers=[heatmap_layer],
-        tooltip={'text': 'Pedestrian count: {PED}'}
-    )
+    fig = px.density_mapbox(df_agg, lat='LAT', lon='LNG', z='PED', radius=50, zoom=7,
+                            mapbox_style='light', opacity=0.8,
+                            center=dict(lat=df['LAT'].mean(), lon=df['LNG'].mean()),
+                            hover_data={'PED': True, 'SIGNAL':':d'},
+                            labels={'PED': 'Pedestrian estimated', 'SIGNAL': 'Signal No.'},
+                            color_continuous_scale='YlOrRd' , height = 500)
+    fig.update_traces(hovertemplate='Pedestrian estimated: %{z}<br>Signal No.: %{customdata[0]}<extra></extra>')
     return fig
+
+
 
 # Define the Streamlit app
 def main():
     # Set the app title
     st.set_page_config(page_title='PEDAT Dashboard' , page_icon="📈" , layout="wide"  )
-
     # Add a title to the sidebar
     st.title("Monitoring pedestrian activity in Utah")
     st.markdown(text1)
@@ -372,20 +364,35 @@ def main():
         }
     </style>
     """, unsafe_allow_html=True)
-
-    a = ["All"] + df['ADDRESS'].unique().tolist()
-    default_address = [a[1]]
-    #st.multiselect('Address' ,address , default=default_address)
     
-
+    tab1, tab2, tab3, tab4 = st.tabs(["🚦 **Select Signal**" ,"📈 **Chart**", "🗃 **Data**" , "🗺 **Map**"])
+    tab1.markdown ("**Please select a Signal ID and location from the Map or the sidebar list**")
+    st.sidebar.markdown(f'[**Singleton Transportation Lab**](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
+    expander = st.sidebar.expander("**How to use**")
+    expander.write('''
+            There are Four tabs available in the above. 
+            In these tabs, you can observe pedestrian activity based on selected aggregation methods at one or more signals (on a map or in a figure). 
+            You can also download a CSV file containing the data that is creating the map or figure.
+    ''')
+    expander = st.sidebar.expander("**Notes**")
+    expander.write('''
+            As shown on this website in maps, figures, and tables, pedestrian activity is estimated pedestrian volume , 
+            or an estimate of the total number of daily pedestrian crossings at an intersection. These estimated pedestrian 
+            volumes are based on traffic signal pedestrian push-button data, obtained from high-resolution traffic signal controller 
+            log data, originally obtained from UDOT's Automated Traffic Signal Performance Measures System (ATSPM) system. 
+            Recent research conducted by the Singleton Transportation Lab at Utah State University has validated the use of 
+            pedestrian traffic signal data as a fairly accurate estimate of pedestrian volumes in Utah.
+    ''')
     # Load your DataFrame
-    df3 = df.groupby([pd.Grouper(key='SIGNAL'), 'ADDRESS', 'LAT', 'LNG'])['PED'].sum().reset_index() 
+    df3 = pd.read_gbq(sql_query, credentials=credentials)
+    #df3 = pd.read_csv('mapdata.csv') 
     df3.rename(columns={'LNG': 'LON' }, inplace=True)
-    icon_image = 'R-min.png'
-    icon_size = (25, 25)
-    st.write ("**Please select a Signal ID and location from the Map or the list**")
+    a = ["All"] + df3['ADDRESS'].tolist()
+    default_address = [a[1]]
+    #icon_image = 'R-min.png'
+    #icon_size = (15, 15)
     # Create the map object
-    m = folium.Map(location=[df3['LAT'].mean(), df3['LON'].mean()], zoom_start=12 , tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map')
+    m = folium.Map(location=[39.419220, -111.950684], zoom_start=6 , tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map')
     Draw(
         export=False,
         filename="my_data.geojson",
@@ -399,54 +406,52 @@ def main():
         
     ).add_to(m)
 
-    # Create an empty list to hold the selected addresses
-    address= []
-
-    # Add a marker for each location in the DataFrame
-    for index, row in df3.iterrows():
-        folium.Marker(location=(row['LAT'], row['LON']), popup=folium.Popup(row['ADDRESS'], max_width=300,min_width=150),
-        tooltip= row['ADDRESS'], icon=folium.CustomIcon(icon_image, icon_size)).add_to(m)
-        
-    # Render the map using st_folium
-    s = st_folium(m, width='80%', height=400 , returned_objects=["last_object_clicked", "last_active_drawing"])
-    # Check if the JSON object is not None
-    if s is not None and "last_object_clicked" in s and s["last_object_clicked"] is not None:
-        json_obj = s["last_object_clicked"]
-        lat = json_obj["lat"]
-        lng = json_obj["lng"]
-
-
-        # Filter the dataframe based on the lat and lng values
-        filtered_df = df3[(df3['LAT'] == lat) & (df3['LON'] == lng)]
-
-        # Print the 'ADDRESS' value for each row in the filtered dataframe
-        for index, row in filtered_df.iterrows():
-            address.append(row['ADDRESS'])
-        
-        a = ["All"] + df['ADDRESS'].unique().tolist()
-        selected_signals = st.multiselect('**Signal ID and Location**', a , default = address)
-    
-    elif s is not None and "last_active_drawing" in s and s["last_active_drawing"] is not None:
-        # A polygon has been drawn on the map
-        polygon_coords = s["last_active_drawing"]["geometry"]["coordinates"]
-        polygon = Polygon(polygon_coords[0])
-
+    with tab1:
         # Create an empty list to hold the selected addresses
-        selected_addresses = []
-
-        # Iterate through each row of the dataframe and check if its address falls within the polygon
+        address= []
+        # Create a MarkerCluster layer
+        marker_cluster = MarkerCluster(name='Markers', control=False)
+        # Add a marker for each location in the DataFrame
         for index, row in df3.iterrows():
-            point = Point(row['LON'], row['LAT'])
-            if polygon.contains(point):
-                selected_addresses.append(row['ADDRESS'])
+            folium.Marker(location=(row['LAT'], row['LON']), popup=folium.Popup(row['ADDRESS'], max_width=300,min_width=150),
+            tooltip= row['ADDRESS']).add_to(marker_cluster)
+            # Add the MarkerCluster layer to the map
+            marker_cluster.add_to(m)
+        # Render the map using st_folium
+        s = st_folium(m, width='80%', height=400 , returned_objects=["last_object_clicked", "last_active_drawing"])
+        # Check if the JSON object is not None
+        if s is not None and "last_object_clicked" in s and s["last_object_clicked"] is not None:
+            json_obj = s["last_object_clicked"]
+            lat = json_obj["lat"]
+            lng = json_obj["lng"]
 
-        a = ["All"] + df['ADDRESS'].unique().tolist()
-        selected_signals = st.multiselect('**Signal ID and Location**', a, default=selected_addresses)
-    else:
-        selected_signals = st.multiselect('**Signal ID and Location**', a , default = address)
+            # Filter the dataframe based on the lat and lng values
+            filtered_df = df3[(df3['LAT'] == lat) & (df3['LON'] == lng)]
 
-    # Add a subtitle to the sidebar
-    st.sidebar.markdown(f'[**Singleton Transportation Lab**](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
+            # Print the 'ADDRESS' value for each row in the filtered dataframe
+            for index, row in filtered_df.iterrows():
+                address.append(row['ADDRESS'])
+
+            selected_signals = st.sidebar.multiselect('**Signal ID and Location**', a , default = address)
+        elif s is not None and "last_active_drawing" in s and s["last_active_drawing"] is not None:
+            # A polygon has been drawn on the map
+            polygon_coords = s["last_active_drawing"]["geometry"]["coordinates"]
+            polygon = Polygon(polygon_coords[0])
+
+            # Create an empty list to hold the selected addresses
+            selected_addresses = []
+
+            # Iterate through each row of the dataframe and check if its address falls within the polygon
+            for index, row in df3.iterrows():
+                point = Point(row['LON'], row['LAT'])
+                if polygon.contains(point):
+                    selected_addresses.append(row['ADDRESS'])
+
+            selected_signals = st.sidebar.multiselect('**Signal ID and Location**', a, default=selected_addresses)
+        else:
+            selected_signals = st.sidebar.multiselect('**Signal ID and Location**', a , default = address)
+ 
+
     font_css = """
     <style>
     button[data-baseweb="tab"] > div[data-testid="stMarkdownContainer"] > p {
@@ -455,8 +460,7 @@ def main():
     </style>
     """
     st.write(font_css, unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["📈 **Chart**", "🗃 **Data**" , "🗺 **Map**"])
-
+    
     st.markdown(
         """<style>
     div[class*="stMultiSelect"] > label > div[data-testid="stMarkdownContainer"] > p {
@@ -464,18 +468,26 @@ def main():
     }
         </style>
         """, unsafe_allow_html=True)
- 
-    # If "All" is selected, show all signals
-    if "All" in selected_signals:
-        selected_signals = df['ADDRESS'].unique().tolist()
-    else:
-        selected_signals = selected_signals or default_address
     
+    
+    # Check if selected_signals is empty
+    if not selected_signals:
+        # If selected_signals is empty, return an empty dataframe
+        return pd.DataFrame()
 
-    # Add a slider for selecting the location
+    job_config = bigquery.QueryJobConfig(
+    query_parameters=[
+        bigquery.ArrayQueryParameter(
+            "selected_signals", "STRING", selected_signals
+        )
+    ]
+)
+
+    # Add a subtitle to the sidebar
+    df = client.query(sql_query2, job_config=job_config).to_dataframe()
 
     # Create a list of all unique values in the 'ADDRESS' column of the DataFrame
-    all_addresses = df['ADDRESS'].unique().tolist()
+    all_addresses = df3['ADDRESS'].tolist()
 
     # Check if selected_signals is not empty
     if selected_signals:
@@ -489,12 +501,12 @@ def main():
     # Format the metric values
     total_pedestrians_formatted = format_metric(total_pedestrians)
     num_signals_formatted = format_metric(num_signals)
-
+    
     st.sidebar.subheader('Metrics')
-    # Display the metric boxes
     col1, col2 = st.sidebar.columns(2)
+    # Display the metric boxes
     col1.metric("**Total Pedestrian**", total_pedestrians_formatted)
-    col2.metric("**Signals**", num_signals_formatted)
+    col2.metric("**Selected Signals**", num_signals_formatted)
 
     st.markdown(
         """<style>
@@ -512,7 +524,7 @@ def main():
 
     #locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df['P'].dropna().unique().tolist())]
     location_selected = form.selectbox('**Select approach**', options=locations)
-  
+
     st.markdown(
         """<style>
     div[class*="stSelectbox"] > label > div[data-testid="stMarkdownContainer"] > p {
@@ -527,13 +539,12 @@ def main():
     aggregation_method_selected = form.selectbox('**Select aggregation method**', options=aggregation_methods)
 
     # Add a calendar widget to select a date range
-    start_date = form.date_input('**Start date**', df['TIME2'].min())
-    end_date = form.date_input('**End date**', df['TIME2'].max())
-    
+    start_date = form.date_input('**Start date**', df['TIME1'].min())
+    end_date = form.date_input('**End date**', df['TIME1'].max())
+
     # Convert the date objects to datetime objects
     start_datetime = datetime.combine(start_date, datetime.min.time())
     end_datetime = datetime.combine(end_date, datetime.max.time())
-
     
     st.markdown(
         """<style>
@@ -544,93 +555,90 @@ def main():
         """, unsafe_allow_html=True)
 
     form.form_submit_button("Submit")
-
-
-    tab1.subheader('Time series')
-    # Make the time series plot
-    fig = make_chart(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected, template='plotly_dark')
-    tab1.plotly_chart(fig, theme='streamlit', use_container_width=True )
-
-    tab1.subheader('Hourly Pedestrian Activity')
-    tab1.plotly_chart(make_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
-
-    tab1.subheader('Daily Pedestrian Activity')
-    tab1.plotly_chart(make_bar_chart2(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
-
-    tab1.subheader('Pedestrian Activity in relation to Signal and City')
-    # Add a pie chart to show pedestrian activity by signal
-    tab1.plotly_chart(make_pie_and_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
-
-    tab3.subheader('Pedestrian Activity by Location')
-    # Make the map
-    #fig = make_map(df, start_date_selected, end_date_selected , selected_signals , location_selected, aggregation_method_selected)
-    fig = make_map(df, start_datetime, end_datetime , selected_signals , aggregation_method_selected , location_selected)
-    tab3.pydeck_chart(fig)
-
-
-    st.sidebar.markdown(
-        """<style>
-    div[class*="stDate"] > label > div[data-testid="stMarkdownContainer"] > p {
-        font-size: 16px;
-    }
-        </style>
-        """, unsafe_allow_html=True)
-
-
-    # Filter your data based on the selected date range
-    tab2.subheader('Pedestrian Activity Data')
     
-    # Display the filtered data in a table
+    if st.sidebar.button('Create Plot'):
+        # Define dataframe for tabular purpose
+        df2 = df.groupby([pd.Grouper(key='TIME1', freq='Y'), 'SIGNAL', 'LAT', 'LNG', 'CITY'])['PED'].sum().reset_index()
+        df2 = df2.drop('TIME1', axis=1)
+        # If "All" is selected, show all signals
+        if "All" in selected_signals:
+            selected_signals = df3['ADDRESS'].tolist()
+        else:
+            selected_signals = selected_signals or default_address
     
-    table = make_table(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected)
-    cc = table.to_csv(index=False)
-    tab2.download_button(
-        label="📥 Download",
-        data=cc,
-        file_name="FilteredData.csv",
-        mime='text/csv',
-    )
-    # CSS to inject contained in a string
-    hide_dataframe_row_index = """
-                <style>
-                .row_heading.level0 {display:none}
-                .blank {display:none}
-                </style>
-                """
 
-    # Inject CSS with Markdown
-    st.markdown(hide_dataframe_row_index, unsafe_allow_html=True)
-    
-    tab2.dataframe(table , use_container_width=True)
 
-    # Create pivot table
-    tab2.subheader('Time series Data')
-    pivot_table = table.pivot_table(values='Pedestrian', index='Timestamp', columns='Signal ID', aggfunc='sum')
-    cv = pivot_table.to_csv(index=True)
-    tab2.download_button(
-        label="📥 Download",
-        data=cv,
-        file_name="TimeSeries.csv",
-        mime='text/csv',
-    )
-    # Display pivot table
-    tab2.dataframe(pivot_table , use_container_width=True)
+        tab2.subheader('Time series')
+        # Make the time series plot
+        fig = make_chart(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected, template='plotly_dark')
+        tab2.plotly_chart(fig, theme='streamlit', use_container_width=True )
 
-    expander = st.expander("**How to use**")
-    expander.write('''
-            There are three tabs available in the above. 
-            In these tabs, you can observe pedestrian activity based on selected aggregation methods at one or more signals (on a map or in a figure). 
-            You can also download a CSV file containing the data that is creating the map or figure.
-    ''')
-    expander = st.expander("**Notes**")
-    expander.write('''
-            As shown on this website in maps, figures, and tables, pedestrian activity is estimated pedestrian volume , 
-            or an estimate of the total number of daily pedestrian crossings at an intersection. These estimated pedestrian 
-            volumes are based on traffic signal pedestrian push-button data, obtained from high-resolution traffic signal controller 
-            log data, originally obtained from UDOT's Automated Traffic Signal Performance Measures System (ATSPM) system. 
-            Recent research conducted by the Singleton Transportation Lab at Utah State University has validated the use of 
-            pedestrian traffic signal data as a fairly accurate estimate of pedestrian volumes in Utah.
-    ''')
+        tab2.subheader('Hourly Pedestrian Activity')
+        tab2.plotly_chart(make_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
+
+        tab2.subheader('Daily Pedestrian Activity')
+        tab2.plotly_chart(make_bar_chart2(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
+
+        tab2.subheader('Pedestrian Activity in relation to Signal and City')
+        # Add a pie chart to show pedestrian activity by signal
+        tab2.plotly_chart(make_pie_and_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected),theme='streamlit', use_container_width=True)
+
+        tab4.subheader('Pedestrian Activity by Location')
+        # Make the map
+        #fig = make_map(df, start_date_selected, end_date_selected , selected_signals , location_selected, aggregation_method_selected)
+        fig = make_map(df, start_datetime, end_datetime , selected_signals , aggregation_method_selected , location_selected)
+        tab4.plotly_chart(fig , use_container_width=True)
+
+
+        st.sidebar.markdown(
+            """<style>
+        div[class*="stDate"] > label > div[data-testid="stMarkdownContainer"] > p {
+            font-size: 16px;
+        }
+            </style>
+            """, unsafe_allow_html=True)
+
+
+        # Filter your data based on the selected date range
+        tab3.subheader('Pedestrian Activity Data')
+        
+        # Display the filtered data in a table
+        
+        table = make_table(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected)
+        cc = table.to_csv(index=False)
+        tab3.download_button(
+            label="📥 Download",
+            data=cc,
+            file_name="FilteredData.csv",
+            mime='text/csv',
+        )
+        # CSS to inject contained in a string
+        hide_dataframe_row_index = """
+                    <style>
+                    .row_heading.level0 {display:none}
+                    .blank {display:none}
+                    </style>
+                    """
+
+        # Inject CSS with Markdown
+        st.markdown(hide_dataframe_row_index, unsafe_allow_html=True)
+        
+        tab3.dataframe(table , use_container_width=True)
+
+        # Create pivot table
+        tab3.subheader('Time series Data')
+        pivot_table = table.pivot_table(values='Pedestrian', index='Timestamp', columns='Signal ID', aggfunc='sum')
+        cv = pivot_table.to_csv(index=True)
+        tab3.download_button(
+            label="📥 Download",
+            data=cv,
+            file_name="TimeSeries.csv",
+            mime='text/csv',
+        )
+        # Display pivot table
+        tab3.dataframe(pivot_table , use_container_width=True)
+
+
     st.markdown(
         """<style>
     div[class*="stExpander"] > label > div[data-testid="stMarkdownContainer"] > p {
