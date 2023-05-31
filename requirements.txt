@@ -7,3 +7,5 @@ matplotlib
 folium
 streamlit_folium
 shapely
+google-cloud-bigquery
+pandas-gbq
