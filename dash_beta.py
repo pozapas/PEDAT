@@ -432,7 +432,7 @@ def main():
             for index, row in filtered_df.iterrows():
                 address.append(row['ADDRESS'])
 
-            selected_signals = st..multiselect('**Signal ID and Location**', a , default = address)
+            selected_signals = st.multiselect('**Signal ID and Location**', a , default = address)
         elif s is not None and "last_active_drawing" in s and s["last_active_drawing"] is not None:
             # A polygon has been drawn on the map
             polygon_coords = s["last_active_drawing"]["geometry"]["coordinates"]
@@ -447,9 +447,9 @@ def main():
                 if polygon.contains(point):
                     selected_addresses.append(row['ADDRESS'])
 
-            selected_signals = st..multiselect('**Signal ID and Location**', a, default=selected_addresses)
+            selected_signals = st.multiselect('**Signal ID and Location**', a, default=selected_addresses)
         else:
-            selected_signals = st..multiselect('**Signal ID and Location**', a , default = address)
+            selected_signals = st.multiselect('**Signal ID and Location**', a , default = address)
  
     if "All" in selected_signals:
         selected_signals = df3['ADDRESS'].unique().tolist()
