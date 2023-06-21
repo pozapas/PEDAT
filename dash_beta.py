@@ -771,60 +771,6 @@ def main():
                                     ticktext=[str(signal_id) for signal_id in signal_ids]))
         tab2.plotly_chart(fig, theme='streamlit', use_container_width=True)
 
-        # Assuming you have imported the necessary libraries and have your plots stored in figs variable
-        import copy
-        # Create a deep copy of the figure to avoid modifying the original
-        fig6 = copy.deepcopy(fig1)
-        # Remove the range slider from the x-axis
-        fig6.update_layout(xaxis=dict(rangeselector=dict(visible=False ),rangeslider=dict(visible=False),type="date"))
-        # Assuming you have imported the necessary libraries and have your plots stored in figs variable
-        figs = [fig6, fig3, fig4, fig5]
-
-        # Create a new PDF document with landscape orientation
-        pdf_buffer = BytesIO()
-        c = canvas.Canvas(pdf_buffer, pagesize=landscape(A4))
-
-        # Set the font and font size for the report
-        c.setFont("Helvetica", 14)
-
-        # Define the margins of the pages
-        left_margin = 0.5 * inch
-        bottom_margin = 0.5 * inch
-
-        # Define the title for the report
-        title = "My Custom Report"
-        c.setFont("Helvetica-Bold", 20)
-        c.drawCentredString(0.5 * A4[0], A4[1] - 0.75 * inch, title)
-
-        # Define the text to be displayed above the plots
-        text = "This is some additional text on the report."
-
-        # Iterate over each figure and add it to the PDF report
-        for fig in figs:
-            # Save the figure to a temporary file
-            with tempfile.NamedTemporaryFile(suffix='.png') as tmpfile:
-                # Save the modified figure to the temporary file
-                fig.write_image(tmpfile.name, format='png', scale=2)  # Increase scale for better image quality
-
-                # Draw the text on the PDF report above the plot
-                c.drawString(left_margin, A4[1] - 0.5 * inch, text)
-
-                # Draw the image on the PDF report with adjusted margins
-                c.drawImage(tmpfile.name, left_margin, bottom_margin, width=A4[1] - 2 * left_margin,
-                            height=A4[0] - 2 * bottom_margin - 0.5 * inch)  # Adjust height to accommodate text
-                c.showPage()
-
-        # Save the PDF report
-        c.save()
-
-        # Retrieve the PDF report as bytes
-        pdf_bytes = pdf_buffer.getvalue()
-        pdf_buffer.close()
-
-
-        # Display a download button for the PDF report
-        tab5.download_button('Download Report', data=pdf_bytes, file_name='report.pdf', mime='application/pdf')
-
     st.markdown(
         """<style>
     div[class*="stExpander"] > label > div[data-testid="stMarkdownContainer"] > p {
