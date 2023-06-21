@@ -10,5 +10,4 @@ shapely
 google-cloud-bigquery
 pandas-gbq
 reportlab
-threading
 fpdf
