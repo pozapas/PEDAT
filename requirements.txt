@@ -9,7 +9,6 @@ streamlit_folium
 shapely
 google-cloud-bigquery
 pandas-gbq
-tempfile
 reportlab
 threading
 fpdf
