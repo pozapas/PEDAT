@@ -1178,7 +1178,7 @@ def main():
 
             # Add selected signals
             pdf.set_font('Arial', 'B', 14)
-            pdf.ln(10) 
+            pdf.ln(5) 
             pdf.cell(100, 10, 'Selected Signals:', ln=True, align='L')
             pdf.set_font('Arial', '', 12)
             for signal in selected_signals:
@@ -1186,6 +1186,7 @@ def main():
 
             # Add duration
             pdf.set_font('Arial', 'B', 14)
+            pdf.ln(5)
             pdf.cell(0, 10, 'Duration:', ln=True)
             pdf.set_font('Arial', '', 12)
             start_date = start_datetime.strftime('%Y-%m-%d') 
