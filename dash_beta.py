@@ -1179,10 +1179,10 @@ def main():
             # Add selected signals
             pdf.set_font('Arial', 'B', 14)
             pdf.ln(5) 
-            pdf.cell(100, 10, 'Selected Signals:', ln=True, align='L')
+            pdf.cell(1, 10, 'Selected Signals:', ln=True, align='L')
             pdf.set_font('Arial', '', 12)
             for signal in selected_signals:
-                pdf.cell(100, 6, '- ' + signal, ln=True, align='L')
+                pdf.cell(1, 6, '- ' + signal, ln=True, align='L')
 
             # Add duration
             pdf.set_font('Arial', 'B', 14)
