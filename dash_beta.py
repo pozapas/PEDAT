@@ -1211,7 +1211,16 @@ def main():
 
 
             # Save the report as a PDF
-            pdf.output("report.pdf", "F")
+            #pdf.output("report.pdf", "F")
+            # Save the PDF to a BytesIO object
+            pdf_buffer = BytesIO()
+            pdf.output(pdf_buffer, "F")
+            pdf_bytes = pdf_buffer.getvalue()
+
+            # Create a download link for the PDF
+            b64_pdf = base64.b64encode(pdf_bytes).decode()
+            href = f'<a href="data:file/pdf;base64,{b64_pdf}" download="report.pdf">Click here to download the PDF report</a>'
+            st.markdown(href, unsafe_allow_html=True)
 
             files_to_remove = ["fig1.png", "fig3.png", "fig4.png", "fig5.png" ,  "fig6.png"]
 
