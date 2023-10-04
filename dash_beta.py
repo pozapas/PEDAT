@@ -1,11 +1,11 @@
-# PEDAT Dashboard V.0.0.7
+# PEDAT Dashboard V.0.0.8
 #pip install protobuf==3.19.6
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import pydeck as pdk
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import time
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
@@ -40,7 +40,8 @@ pio.kaleido.scope.default_scale = 2
 import random
 from keplergl import KeplerGl
 from streamlit_keplergl import keplergl_static
-from datetime import timedelta
+import matplotlib.colors
+from folium.plugins import Search
 
 # Create API client.
 credentials = service_account.Credentials.from_service_account_info(
@@ -73,11 +74,6 @@ text2 = 'Data are derived from pedestrian push-button presses at traffic signals
 # Define the x and y axis labels
 x_axis_label = 'TIME1'
 y_axis_label = 'PED'
-
-
-import random
-import matplotlib.pyplot as plt
-import matplotlib.colors
 
 def create_color_map(unique_signals):
     colors = plt.cm.rainbow(np.linspace(0, 1, len(unique_signals)))
@@ -269,7 +265,6 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
         marker_colors=df_agg1['Signal ID'].apply(lambda x: color_map[x])
     ))
     fig_treemap.update_layout(title='Pedestrian Activity by City', showlegend=False)
-
 
     # Combine the pie, bar, and treemap charts
     fig_combined = make_subplots(rows=1, cols=2, specs=[[{'type': 'domain'}, {'type': 'treemap'}]])
@@ -480,10 +475,8 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
     # Convert the timestamp to a Pandas datetime object
     start_date_datetime = pd.to_datetime(start_date_timestamp_ms, unit='ms')
     # Add one month
-    #next_month_datetime = start_date_datetime + pd.DateOffset(months=1)
     next_day_datetime = start_date + timedelta(days=1)
     # Convert to a timestamp in milliseconds
-    #next_month_timestamp_ms = int(next_month_datetime.timestamp() * 1000)
     next_day_timestamp_ms = int(next_day_datetime.timestamp() * 1000)
 
     map_config = {
@@ -495,14 +488,14 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
                 'zoom': 13,
             },
             'mapStyle': {
-                'styleType': 'light'  # Set the map style to "Light"
+                'styleType': 'light'  
             },
             'visState': {
                 'layers': [{
-                    'type': 'point',  # Change from 'hexagon' to 'point'
+                    'type': 'hexagon',  
                     'config': {
                         'dataId': 'data_1',
-                        'label': 'Points',
+                        'label': 'Hexagon',
                         'color': [194, 46, 0],
                         'columns': {
                             'lat': 'LAT',
@@ -511,16 +504,18 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
                         'isVisible': True,
                         'visConfig': {
                             'opacity': 0.8,
+                            'worldUnitSize': 0.05,
                             'radius': 5,
                             'outline': True, 
-                            'filled': False, 
+                            'filled': False,
+                            'enable3d': True, 
                             'colorRange': {
-                                'name': 'Global Warming',
+                                'name': 'ColorBrewer YlGn-6',
                                 'type': 'sequential',
-                                'category': 'Uber',
-                                'colors': ['#5A1846', '#900C3F', '#C70039', '#E3611C', '#F1920E', '#FFC300']
+                                'category': 'ColorBrewer',
+                                'colors': ['#ffffcc','#d9f0a3','#addd8e','#78c679','#31a354','#006837']
                             },
-                        },
+                                                    },
                         'textLabel': [{
                             'field': None,
                             'color': [255, 255, 255],
@@ -531,15 +526,13 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
                         }]
                     },
                     'visualChannels': {
-                        'colorField': {'name': 'Pedestrian volume', 'type': 'integer'},
+                        'colorField': {'name': 'Signal ID', 'type': 'integer'},
                         'colorScale': 'quantile',
-                        'sizeField': {'name': 'Pedestrian volume', 'type': 'integer'},  # Adjust the point size based on the PED value
+                        'sizeField': {'name': 'Pedestrian volume', 'type': 'integer'},  
                         'sizeScale': 'linear'
                     }
                 }],
-                'interactionConfig': {'tooltip': {'fieldsToShow': {'data_1': [{'name': 'Pedestrian volume',
-                      'format': '.0f'}, {'name': 'Signal ID',
-                      'format': None},{'name': 'Timestamp',
+                'interactionConfig': {'tooltip': {'fieldsToShow': {'data_1': [{'name': 'Signal ID',
                       'format': None}]},
                     'compareMode': False,
                     'compareType': 'absolute',
@@ -551,7 +544,6 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
                     'dataId': 'data_1',
                     'name': 'Timestamp',
                     'type': 'timeRange',
-                    #'value': [start_date.timestamp() * 1000, end_date.timestamp() * 1000],
                     'value': [start_date_timestamp_ms, next_day_timestamp_ms],
                     'enlarged': True,
                     'plotType': 'lineChart',
@@ -591,9 +583,7 @@ def main():
         }
     </style>
     """, unsafe_allow_html=True)
-   
-    #tab1, tab2, st, st = st.tabs(["🏁 **Start Here**" ,"📈 **Charts**" , "🗺 **Maps**" , "📥 **Downloads**" ])
-    #tab1.markdown ("**Please select a Signal ID and location from the Map or the sidebar list**")
+
     st.sidebar.markdown(f'[**Singleton Transportation Lab**](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
     expander2 = st.sidebar.expander("**How to use**")
     with expander2:
@@ -630,7 +620,6 @@ def main():
     else:
         selected_data = df3[(df3['CITY'].isin(selected_location)) | (df3['County'].isin(selected_location))]
 
-
     # Compute the mean latitude and longitude of the selected cities
     mean_lat = selected_data['LAT'].mean()
     mean_lng = selected_data['LON'].mean()
@@ -641,38 +630,70 @@ def main():
     icon_size = (7, 14)
     
     # Create the map object
-    m = folium.Map(location=[mean_lat,mean_lng], zoom_start=6 , tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map')
+    m = folium.Map(location=[mean_lat,mean_lng], zoom_start=8 , tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map')
+
+
+
+    # Convert your DataFrame to GeoJSON format
+    geo_data = df3[["LAT", "LON", "ADDRESS"]].copy()
+
+    def feature_from_row(row):
+        return {
+            "type": "Feature",
+            "properties": {"address": row["ADDRESS"]},
+            "geometry": {
+                "type": "Point",
+                "coordinates": [row["LON"], row["LAT"]]
+            }
+        }
+
+    geo_json = {
+        "type": "FeatureCollection",
+        "features": geo_data.apply(feature_from_row, axis=1).tolist()
+    }
+
+    # Create the invisible GeoJson layer for search functionality
+    geo_layer = folium.GeoJson(geo_json ,
+    marker=folium.CircleMarker(radius=0.00000000000000000001, color="white",opacity=7)).add_to(m)
+    search = Search(
+        layer=geo_layer,
+        geom_type="Point",
+        placeholder="Search for an address/signals",
+        collapsed=True,
+        search_label="address"
+    ).add_to(m)
+
+    # Add your custom icons
+    for index, row in df3.iterrows():
+        folium.Marker(
+            location=(row['LAT'], row['LON']),
+            popup=folium.Popup(row['ADDRESS'], max_width=300, min_width=150),
+            tooltip=row['ADDRESS'],
+            icon=folium.CustomIcon(icon_image, icon_size)
+        ).add_to(m)
+
     Draw(
         export=False,
         filename="my_data.geojson",
         position="topleft",
         draw_options={
             'circle': False,
-            'circlemarker':False,
-            'marker' : False,
-            'polyline' : False
-            
+            'circlemarker': False,
+            'marker': False,
+            'polyline': False
         }
-        
     ).add_to(m)
-    
 
-    # Create an empty list to hold the selected addresses
-    address= []
-    # Create a MarkerCluster layer
-    #marker_cluster = MarkerCluster(name='Markers', control=False)
-    # Add a marker for each location in the DataFrame
-    for index, row in df3.iterrows():
-        folium.Marker(location=(row['LAT'], row['LON']), popup=folium.Popup(row['ADDRESS'], max_width=300,min_width=150),
-        tooltip= row['ADDRESS'] , icon=folium.CustomIcon(icon_image , icon_size)).add_to(m)
-        # Add the MarkerCluster layer to the map
-        #marker_cluster.add_to(m)
-        #m.fit_bounds(m.get_bounds())
-        sw = df3[['LAT', 'LON']].min().values.tolist()
-        ne = df3[['LAT', 'LON']].max().values.tolist()
-        m.fit_bounds([sw, ne]) 
+    address = []
+
+    # Fit the map bounds to show all points
+    sw = df3[['LAT', 'LON']].min().values.tolist()
+    ne = df3[['LAT', 'LON']].max().values.tolist()
+    m.fit_bounds([sw, ne]) 
+
     # Render the map using st_folium
-    s = st_folium(m, width='80%', height=400 , returned_objects=["last_object_clicked", "last_active_drawing"])
+    s = st_folium(m, width='80%', height=400, returned_objects=["last_object_clicked", "last_active_drawing"])
+
     # Check if the JSON object is not None
     if s is not None and "last_object_clicked" in s and s["last_object_clicked"] is not None:
         json_obj = s["last_object_clicked"]
@@ -770,10 +791,6 @@ def main():
         addresses_to_keep = set(selected_signals).intersection(set(all_addresses))
         all_addresses = list(addresses_to_keep)
 
-    
-
-    
-
     st.markdown(
         """<style>
     div[class*="stColumn"] > label > div[data-testid="stMarkdownContainer"] > p {
@@ -781,7 +798,6 @@ def main():
     }
         </style>
         """, unsafe_allow_html=True)
-
 
     st.sidebar.markdown("[Step 3: Select dashboard parameters](#step-3-select-dashboard-parameters)")
     st.subheader('Step 3: Select dashboard parameters')
@@ -820,10 +836,6 @@ def main():
     # Convert the date objects to datetime objects
     start_datetime = datetime.combine(start_date, datetime.min.time())
     end_datetime = datetime.combine(end_date, datetime.max.time())
-
-    #dt_str = start_date.strftime("%Y-%m-%d")
-    #dt_str2 = end_date.strftime("%Y-%m-%d")
-
     dt_str = start_date.strftime("%b %d, %Y")
     dt_str2 = end_date.strftime("%b %d, %Y")
 
@@ -927,12 +939,7 @@ def main():
             # Box Plot
             st.subheader('Box plot of pedestrian activity, by (selected time unit), by location')
             signal_ids = table['Signal ID'].unique() 
-            #unique_signals = table['Signal ID'].unique().tolist()
-            #color_map = create_color_map(unique_signals)
             fig = go.Figure()
-
-            # Specify a color scale for the plot
-            #color_scale = px.colors.qualitative.Pastel
 
             for signal_id, group in table.groupby('Signal ID'):
                 if signal_id in signal_ids:
@@ -1020,12 +1027,7 @@ def main():
             # Box Plot
             st.subheader('Box plot of pedestrian activity, by (selected time unit), by location')
             signal_ids = table['Signal ID'].unique() 
-            #unique_signals = table['Signal ID'].unique().tolist()
-            #color_map = create_color_map(unique_signals)
             fig = go.Figure()
-
-            # Specify a color scale for the plot
-            #color_scale = px.colors.qualitative.Pastel
 
             for signal_id, group in table.groupby('Signal ID'):
                 if signal_id in signal_ids:
@@ -1091,8 +1093,6 @@ def main():
         file_name="DiscriptiveStat.csv",
         mime='text/csv',)
         st.dataframe(grouped , use_container_width=True)
-
-    
     
     class PDF(FPDF):
 
@@ -1211,9 +1211,6 @@ def main():
                         pdf.cell(0, 10, subtitle, ln=True)
                         pdf.image(f'fig{i}.png', x=10, y=20, w=190)
 
-
-            # Save the report as a PDF
-            #pdf.output("report.pdf", "F")
             # Save the PDF to a BytesIO object
             pdf_buffer = BytesIO()
             pdf.output(pdf_buffer, "F")
