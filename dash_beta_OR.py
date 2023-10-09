@@ -1250,7 +1250,7 @@ def main():
 
             # Set title
             pdf.set_font('Arial', 'B', 16)
-            pdf.cell(0, 15, 'Monitoring crosswalk users activity in Oregon', ln=True, align='C')
+            pdf.cell(0, 15, 'Monitoring pedestrian activity in Oregon', ln=True, align='C')
 
             # Add a sample text
             pdf.set_font('Arial', '', 12)
