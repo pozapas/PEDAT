@@ -90,13 +90,8 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
         df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby(groupby).agg({'PED': 'sum'}).reset_index()
 
     # Create the line chart
-    if aggregation_method == 'Hourly':
-        x_axis_label = 'Time'
-        fig = px.line(df_agg, x='TIME2', y='PED' ,  color='ADDRESS', template=template)
-    else:
-        x_axis_label = 'Date'
-        fig = px.line(df_agg, x='TIME2', y='PED', color='ADDRESS', template=template)
-
+    x_axis_label = 'Time' if aggregation_method == 'Hourly' else 'Date'
+    fig = px.line(df_agg, x='TIME2', y='PED' ,  color='ADDRESS', template=template)
     fig.update_xaxes(title_text=x_axis_label)
     fig.update_yaxes(title_text='Pedestrian Estimated')
     fig.update_traces(line=dict(width=3))
@@ -106,18 +101,20 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
     fig.update_layout(
         xaxis=dict(
             rangeselector=dict(
-                buttons=list([
+                buttons=[
                     dict(count=1, label="1d", step="day", stepmode="backward"),
                     dict(count=7, label="1w", step="day", stepmode="backward"),
-                    dict(count=1, label="1m", step="month", stepmode="backward"),
-                    dict(count=6, label="6m", step="month", stepmode="backward"),
-                    dict(step="all")
-                ])
+                    dict(
+                        count=1, label="1m", step="month", stepmode="backward"
+                    ),
+                    dict(
+                        count=6, label="6m", step="month", stepmode="backward"
+                    ),
+                    dict(step="all"),
+                ]
             ),
-            rangeslider=dict(
-                visible=True
-            ),
-            type="date"
+            rangeslider=dict(visible=True),
+            type="date",
         )
     )
 
@@ -294,12 +291,11 @@ def make_map(df, start_date, end_date, signals, aggregation_method, location_sel
     mask = (df['TIME2'] >= start_date) & (df['TIME2'] < end_date) & (df['ADDRESS'].isin(signals))
     if location_selected == 'Intersection':
         mask &= df['P'] >= 0  # include all values of P for intersections
+    elif location_selected.startswith('Phase'):
+        phase_num = int(location_selected.split()[1])
+        mask &= df['P'] == phase_num
     else:
-        if location_selected.startswith('Phase'):
-            phase_num = int(location_selected.split()[1])
-            mask &= df['P'] == phase_num
-        else:
-            mask &= df['ADDRESS'] == location_selected
+        mask &= df['ADDRESS'] == location_selected
     df_filtered = df.loc[mask]
 
     agg_functions = {
@@ -338,13 +334,12 @@ def make_map(df, start_date, end_date, signals, aggregation_method, location_sel
         #pitch=10.5,
         #bearing=-27.36
     )
-    fig = pdk.Deck(
+    return pdk.Deck(
         map_style='mapbox://styles/mapbox/light-v11',
         initial_view_state=view_state,
         layers=[heatmap_layer],
-        tooltip={'text': 'Pedestrian count: {PED}'}
+        tooltip={'text': 'Pedestrian count: {PED}'},
     )
-    return fig
 
 # Define the Streamlit app
 def main():
@@ -364,7 +359,7 @@ def main():
                 }
             </style>
             """, unsafe_allow_html=True)
-    
+
     st.markdown("""
     <style>
         .css-6qob1r {
@@ -376,10 +371,10 @@ def main():
     a = ["All"] + df['ADDRESS'].unique().tolist()
     default_address = [a[1]]
     #st.multiselect('Address' ,address , default=default_address)
-    
+
     tab1, tab2, tab3, tab4 = st.tabs(["🚦 **Select Signal**" ,"📈 **Chart**", "🗃 **Data**" , "🗺 **Map**"])
     # Load your DataFrame
-    df3 = df.groupby([pd.Grouper(key='SIGNAL'), 'ADDRESS', 'LAT', 'LNG'])['PED'].sum().reset_index() 
+    df3 = df.groupby([pd.Grouper(key='SIGNAL'), 'ADDRESS', 'LAT', 'LNG'])['PED'].sum().reset_index()
     df3.rename(columns={'LNG': 'LON' }, inplace=True)
     icon_image = 'R-min.png'
     icon_size = (25, 25)
@@ -394,9 +389,9 @@ def main():
             'circle': False,
             'circlemarker':False,
             'polyline' : False
-            
+
         }
-        
+
     ).add_to(m)
 
     with tab1:
@@ -407,7 +402,7 @@ def main():
         for index, row in df3.iterrows():
             folium.Marker(location=(row['LAT'], row['LON']), popup=folium.Popup(row['ADDRESS'], max_width=300,min_width=150),
             tooltip= row['ADDRESS'], icon=folium.CustomIcon(icon_image, icon_size)).add_to(m)
-            
+
         # Render the map using st_folium
         s = st_folium(m, width='80%', height=400 , returned_objects=["last_object_clicked", "last_active_drawing"])
         # Check if the JSON object is not None
@@ -423,10 +418,10 @@ def main():
             # Print the 'ADDRESS' value for each row in the filtered dataframe
             for index, row in filtered_df.iterrows():
                 address.append(row['ADDRESS'])
-            
+
             a = ["All"] + df['ADDRESS'].unique().tolist()
             selected_signals = tab1.multiselect('**Signal ID and Location**', a , default = address)
-        
+
         elif s is not None and "last_active_drawing" in s and s["last_active_drawing"] is not None:
             # A polygon has been drawn on the map
             polygon_coords = s["last_active_drawing"]["geometry"]["coordinates"]
@@ -444,11 +439,13 @@ def main():
             a = ["All"] + df['ADDRESS'].unique().tolist()
             selected_signals = tab1.multiselect('**Signal ID and Location**', a, default=selected_addresses)
         else:
-            
+
             selected_signals = tab1.multiselect('**Signal ID and Location**', a , default = address)
 
     # Add a subtitle to the sidebar
-    st.sidebar.markdown(f'[**Singleton Transportation Lab**](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)')
+    st.sidebar.markdown(
+        '[**Singleton Transportation Lab**](https://engineering.usu.edu/cee/research/labs/patrick-singleton/index)'
+    )
     font_css = """
     <style>
     button[data-baseweb="tab"] > div[data-testid="stMarkdownContainer"] > p {
@@ -457,7 +454,7 @@ def main():
     </style>
     """
     st.write(font_css, unsafe_allow_html=True)
-    
+
     st.markdown(
         """<style>
     div[class*="stMultiSelect"] > label > div[data-testid="stMarkdownContainer"] > p {
@@ -465,13 +462,13 @@ def main():
     }
         </style>
         """, unsafe_allow_html=True)
- 
+
     # If "All" is selected, show all signals
     if "All" in selected_signals:
         selected_signals = df['ADDRESS'].unique().tolist()
     else:
         selected_signals = selected_signals or default_address
-    
+
 
     # Add a slider for selecting the location
 
@@ -509,11 +506,19 @@ def main():
     form = st.sidebar.form("sidebar")
 
     # Create the locations list based on the modified list of addresses
-    locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df[df['ADDRESS'].isin(all_addresses)]['P'].dropna().unique().tolist())]
+    locations = ['Intersection'] + [
+        f'Phase {int(i)}'
+        for i in sorted(
+            df[df['ADDRESS'].isin(all_addresses)]['P']
+            .dropna()
+            .unique()
+            .tolist()
+        )
+    ]
 
     #locations = ['Intersection'] + ['Phase ' + str(int(i)) for i in sorted(df['P'].dropna().unique().tolist())]
     location_selected = form.selectbox('**Select approach**', options=locations)
-  
+
     st.markdown(
         """<style>
     div[class*="stSelectbox"] > label > div[data-testid="stMarkdownContainer"] > p {
@@ -521,7 +526,7 @@ def main():
     }
         </style>
         """, unsafe_allow_html=True)
-    
+
 
     # Add a slider for selecting the aggregation method
     aggregation_methods = ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly']
@@ -530,12 +535,12 @@ def main():
     # Add a calendar widget to select a date range
     start_date = form.date_input('**Start date**', df['TIME2'].min())
     end_date = form.date_input('**End date**', df['TIME2'].max())
-    
+
     # Convert the date objects to datetime objects
     start_datetime = datetime.combine(start_date, datetime.min.time())
     end_datetime = datetime.combine(end_date, datetime.max.time())
 
-    
+
     st.markdown(
         """<style>
     div[class*="stSlider"] > label > div[data-testid="stMarkdownContainer"] > p {
@@ -580,9 +585,9 @@ def main():
 
     # Filter your data based on the selected date range
     tab3.subheader('Pedestrian Activity Data')
-    
+
     # Display the filtered data in a table
-    
+
     table = make_table(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected)
     cc = table.to_csv(index=False)
     tab3.download_button(
@@ -601,7 +606,7 @@ def main():
 
     # Inject CSS with Markdown
     st.markdown(hide_dataframe_row_index, unsafe_allow_html=True)
-    
+
     tab3.dataframe(table , use_container_width=True)
 
     # Create pivot table
@@ -639,7 +644,7 @@ def main():
     }
         </style>
         """, unsafe_allow_html=True)
-   
+
 
     hide_menu_style = """
         <style>
