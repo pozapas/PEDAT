@@ -75,6 +75,7 @@ text1 = 'This website provides data and visualizations of pedestrian activity (a
 x_axis_label = 'TIME1'
 y_axis_label = 'PED'
 
+@st.cache_data()
 def create_color_map(unique_signals):
     colors = plt.cm.rainbow(np.linspace(0, 1, len(unique_signals)))
     colors = [matplotlib.colors.rgb2hex(c) for c in colors]
@@ -82,7 +83,7 @@ def create_color_map(unique_signals):
     color_map = dict(zip(unique_signals, colors))
     return color_map
 
-@st.cache_resource
+@st.cache_data()
 def format_metric(value):
     # Check if the value is greater than or equal to 1 billion
     if value >= 1e9:
@@ -100,7 +101,7 @@ def format_metric(value):
     else:
         return str(value)
 
-@st.cache_resource
+@st.cache_data()
 def make_chart(df, signals, start_date, end_date, aggregation_method, location, Dash_selected, act_selected, color_map, template='plotly'):
     
     # Map act_selected to its corresponding column
@@ -186,7 +187,7 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
     return fig
 
 
-@st.cache_resource
+@st.cache_data()
 def make_table(df, signals, start_date, end_date, aggregation_method, location,Dash_selected , act_selected):
     # Map act_selected to its corresponding column
     if act_selected == "All crosswalk users (walk, bicycle, scooter, skateboard, wheelchair, other)":
@@ -243,7 +244,7 @@ def make_table(df, signals, start_date, end_date, aggregation_method, location,D
     df_agg['Timestamp'] = df_agg['Timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
     return df_agg
 
-@st.cache_resource
+@st.cache_data()
 def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_selected , color_map ,  act_selected):
     # Map act_selected to its corresponding column
     if act_selected == "All crosswalk users (walk, bicycle, scooter, skateboard, wheelchair, other)":
@@ -308,7 +309,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
     
     return fig_combined , df_agg1
 
-@st.cache_resource
+@st.cache_data()
 def make_bar_chart(df, signals, start_date, end_date, location,Dash_selected , act_selected):
     # Map act_selected to its corresponding column
     if act_selected == "All crosswalk users (walk, bicycle, scooter, skateboard, wheelchair, other)":
@@ -366,7 +367,7 @@ def make_bar_chart(df, signals, start_date, end_date, location,Dash_selected , a
     
     return fig_bar , df_agg2
 
-@st.cache_resource
+@st.cache_data()
 def make_bar_chart2(df, signals, start_date, end_date, location,Dash_selected,act_selected):
     # Map act_selected to its corresponding column
     if act_selected == "All crosswalk users (walk, bicycle, scooter, skateboard, wheelchair, other)":
@@ -423,7 +424,7 @@ def make_bar_chart2(df, signals, start_date, end_date, location,Dash_selected,ac
 
     return fig_bar, df_agg2
 
-@st.cache_resource
+@st.cache_data()
 def make_bar_chart3(df, signals, start_date, end_date, location,Dash_selected,act_selected):
     # Map act_selected to its corresponding column
     if act_selected == "All crosswalk users (walk, bicycle, scooter, skateboard, wheelchair, other)":
@@ -839,15 +840,23 @@ def main():
     Dash_selected = st.selectbox('**Select dashboard type**', options=dash)
 
     # Add a subtitle to the sidebar
-    if Dash_selected == 'Recent data (last 1 year)':
-        df = client.query(sql_query2, job_config=job_config).to_dataframe()
-        unique_signals = df['SIGNAL'].unique().tolist()
-        color_map = create_color_map(unique_signals)
-    else:
-        df = client.query(sql_query3, job_config=job_config).to_dataframe()
-        df['TIME1'] = pd.to_datetime(df['TIME1'])
-        unique_signals = df['SIGNAL'].unique().tolist()
-        color_map = create_color_map(unique_signals)
+    @st.cache_data()
+    def get_data(Dash_selected):
+        if Dash_selected == 'Recent data (last 1 year)':
+            df = client.query(sql_query2, job_config=job_config).to_dataframe()
+            unique_signals = df['SIGNAL'].unique().tolist()
+            color_map = create_color_map(unique_signals)
+        else:
+            df = client.query(sql_query3, job_config=job_config).to_dataframe()
+            df['TIME1'] = pd.to_datetime(df['TIME1'])
+            unique_signals = df['SIGNAL'].unique().tolist()
+            color_map = create_color_map(unique_signals)
+        
+        return df, color_map
+
+    # Usage
+    df, color_map = get_data(Dash_selected)
+
 
     # Create a list of all unique values in the 'ADDRESS' column of the DataFrame
     all_addresses = df3['ADDRESS'].tolist()
