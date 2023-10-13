@@ -1019,7 +1019,7 @@ def main():
             table['Volume'] = table['Volume'].str.replace(',', '.')
             table['Signal ID'] = pd.to_numeric(table['Signal ID'], errors='coerce')
             table['Volume'] = pd.to_numeric(table['Volume'] , errors='coerce')
-            grouped = table.set_index('Signal ID')['Volume'].describe()
+            grouped = table.groupby('Signal ID')['Volume'].describe()
             missing_counts = table['Volume'].isna().groupby(table['Signal ID']).sum()
             grouped['Missing Count'] = missing_counts
             DS = grouped.to_csv(index=True)
@@ -1108,7 +1108,7 @@ def main():
             table['Volume'] = table['Volume'].str.replace(',', '.')
             table['Signal ID'] = pd.to_numeric(table['Signal ID'], errors='coerce')
             table['Volume'] = pd.to_numeric(table['Volume'] , errors='coerce')
-            grouped = table.set_index('Signal ID')['Volume'].describe()
+            grouped = table.groupby('Signal ID')['Volume'].describe()
             missing_counts = table['Volume'].isna().groupby(table['Signal ID']).sum()
             grouped['Missing Count'] = missing_counts
             DS = grouped.to_csv(index=True)
