@@ -79,8 +79,7 @@ def create_color_map(unique_signals):
     colors = plt.cm.rainbow(np.linspace(0, 1, len(unique_signals)))
     colors = [matplotlib.colors.rgb2hex(c) for c in colors]
     random.shuffle(colors)  # Shuffle colors for variety
-    color_map = dict(zip(unique_signals, colors))
-    return color_map
+    return dict(zip(unique_signals, colors))
 
 @st.cache_resource
 def format_metric(value):
@@ -112,13 +111,9 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
         col = 'PED'
     else:
         raise ValueError(f"Invalid value for act_selected: {act_selected}")
-    
+
     # Handle the location filter
-    if location == 'All':
-        filter_val = 'all'
-    else:
-        filter_val = location.split()[-1]
-    
+    filter_val = 'all' if location == 'All' else location.split()[-1]
     if aggregation_method == 'Hours':
         groupby = ['SIGNAL','ADDRESS', pd.Grouper(key='TIME1', freq='1H')]
     elif aggregation_method == 'Days':
@@ -135,26 +130,18 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
         df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
     else:
         df_filtered = df[(df['TIME1'] >= start_date) & (df['TIME1'] <= end_date) & (df['ADDRESS'].isin(signals))]
-    
+
 # Aggregate the data
     if location == 'All':
         df_agg = df_filtered.groupby(groupby).agg({col: 'sum'}).reset_index()
-        df_agg[col] = df_agg[col].round(0)
-        df_agg = df_agg.rename(columns={'SIGNAL': 'Signal ID', 'TIME1':'Timestamp' , col:'Volume' })
-
     else:
         df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby(groupby).agg({col: 'sum'}).reset_index()
-        df_agg[col] = df_agg[col].round(0)
-        df_agg = df_agg.rename(columns={'SIGNAL': 'Signal ID' , 'TIME1':'Timestamp' , col:'Volume' })
+    df_agg[col] = df_agg[col].round(0)
+    df_agg = df_agg.rename(columns={'SIGNAL': 'Signal ID', 'TIME1':'Timestamp' , col:'Volume' })
 
     # Create the line chart
-    if aggregation_method == 'Hours':
-        x_axis_label = '<b>Time<b>'
-        fig = px.line(df_agg, x='Timestamp', y='Volume' ,  color='Signal ID', color_discrete_map=color_map, template=template)
-    else:
-        x_axis_label = 'Date'
-        fig = px.line(df_agg, x='Timestamp', y='Volume', color='Signal ID', color_discrete_map=color_map, template=template)
-
+    x_axis_label = '<b>Time<b>' if aggregation_method == 'Hours' else 'Date'
+    fig = px.line(df_agg, x='Timestamp', y='Volume' ,  color='Signal ID', color_discrete_map=color_map, template=template)
     fig.update_xaxes(title_text=x_axis_label)
     fig.update_yaxes(title_text='<b>Volume<b>')
     fig.update_traces(line=dict(width=3))
@@ -164,18 +151,20 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
     fig.update_layout(
         xaxis=dict(
             rangeselector=dict(
-                buttons=list([
+                buttons=[
                     dict(count=1, label="1d", step="day", stepmode="backward"),
                     dict(count=7, label="1w", step="day", stepmode="backward"),
-                    dict(count=1, label="1m", step="month", stepmode="backward"),
-                    dict(count=6, label="6m", step="month", stepmode="backward"),
-                    dict(step="all")
-                ])
+                    dict(
+                        count=1, label="1m", step="month", stepmode="backward"
+                    ),
+                    dict(
+                        count=6, label="6m", step="month", stepmode="backward"
+                    ),
+                    dict(step="all"),
+                ]
             ),
-            rangeslider=dict(
-                visible=True
-            ),
-            type="date"
+            rangeslider=dict(visible=True),
+            type="date",
         )
     )
 
@@ -197,7 +186,7 @@ def make_table(df, signals, start_date, end_date, aggregation_method, location,D
         col = 'PED'
     else:
         raise ValueError(f"Invalid value for act_selected: {act_selected}")
-    
+
     if aggregation_method == 'Hours':
         groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1H')]
     elif aggregation_method == 'Days':
@@ -210,17 +199,13 @@ def make_table(df, signals, start_date, end_date, aggregation_method, location,D
         groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1Y')]
 
     # Handle the location filter
-    if location == 'All':
-        filter_val = 'all'
-    else:
-        filter_val = location.split()[-1]
-
+    filter_val = 'all' if location == 'All' else location.split()[-1]
     # Filter the dataframe by the selected signals and date range
     if Dash_selected == 'Recent data (last 1 year)':
         df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
     else:
         df_filtered = df[(df['TIME1'] >= start_date) & (df['TIME1'] <= end_date) & (df['ADDRESS'].isin(signals))]
-    
+
     # Aggregate the data
     agg_dict = {col: 'sum', 'CITY': 'first', 'SIGNAL': 'first' , 'LAT': 'first' , 'LON': 'first'}
     if location == 'All':
@@ -256,11 +241,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
         raise ValueError(f"Invalid value for act_selected: {act_selected}")
 
     # Handle the location filter
-    if location == 'All':
-        filter_val = 'all'
-    else:
-        filter_val = location.split()[-1]
-
+    filter_val = 'all' if location == 'All' else location.split()[-1]
     # Filter the dataframe by the selected signals and date range
     if Dash_selected == 'Recent data (last 1 year)':
         df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
@@ -305,7 +286,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
     fig4.update_layout(title='Crosswalk users Activity by Signal', showlegend=True , legend=dict(title='Signal ID'))
     fig4.update_layout(template='plotly')
     fig4.write_image("fig2.png")
-    
+
     return fig_combined , df_agg1
 
 @st.cache_resource
@@ -321,11 +302,7 @@ def make_bar_chart(df, signals, start_date, end_date, location,Dash_selected , a
         raise ValueError(f"Invalid value for act_selected: {act_selected}")
 
     # Handle the location filter
-    if location == 'All':
-        filter_val = 'all'
-    else:
-        filter_val = location.split()[-1]
-
+    filter_val = 'all' if location == 'All' else location.split()[-1]
     # Filter the dataframe by the selected signals and date range
     if Dash_selected == 'Recent data (last 1 year)':
         df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
@@ -338,19 +315,19 @@ def make_bar_chart(df, signals, start_date, end_date, location,Dash_selected , a
     else:
         df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby('TIME1').agg({col: 'sum'}).reset_index()
 
-    
+
     # Convert the "TIME1" column to hour values
     df_agg['TIME1'] = pd.to_datetime(df_agg['TIME1']).dt.hour
-    
+
     # Aggregate the data by hour and sum the pedestrian counts
     df_agg2 = df_agg.groupby('TIME1').agg({col: 'sum'}).reset_index()
-    
+
     # Calculate the hourly average by dividing the sum of PED by number of days/hours
     df_agg2[col] = df_agg2[col] / 24
 
     # Round the pedestrian count to 0 decimal places
     df_agg2[col] = df_agg2[col].round(0)
-    
+
     # Define the data and layout for the bar chart
     data = [go.Bar(x=df_agg2['TIME1'], y=df_agg2[col], text=df_agg2[col], texttemplate='%{y:,.0f}', textposition='auto')]
     layout = go.Layout(xaxis_title='<b>Hour of the day<b>', yaxis_title='<b>Volume<b>', xaxis=dict(tickmode='linear', dtick=1))
@@ -363,7 +340,7 @@ def make_bar_chart(df, signals, start_date, end_date, location,Dash_selected , a
     fig2.update_layout(title='Average hourly crosswalk users activity, by hour-of-day, total of all locations')
     fig2.update_layout(template='plotly')
     fig2.write_image("fig3.png")
-    
+
     return fig_bar , df_agg2
 
 @st.cache_resource
@@ -379,17 +356,13 @@ def make_bar_chart2(df, signals, start_date, end_date, location,Dash_selected,ac
         raise ValueError(f"Invalid value for act_selected: {act_selected}")
 
     # Handle the location filter
-    if location == 'All':
-        filter_val = 'all'
-    else:
-        filter_val = location.split()[-1]
-
+    filter_val = 'all' if location == 'All' else location.split()[-1]
     # Filter the dataframe by the selected signals and date range
     if Dash_selected == 'Recent data (last 1 year)':
         df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
     else:
         df_filtered = df[(df['TIME1'] >= start_date) & (df['TIME1'] <= end_date) & (df['ADDRESS'].isin(signals))]
-    
+
     # Aggregate the data
     if location == 'All':
         df_agg = df_filtered.groupby('TIME1').agg({col: 'sum'}).reset_index()
@@ -436,17 +409,13 @@ def make_bar_chart3(df, signals, start_date, end_date, location,Dash_selected,ac
         raise ValueError(f"Invalid value for act_selected: {act_selected}")
 
     # Handle the location filter
-    if location == 'All':
-        filter_val = 'all'
-    else:
-        filter_val = location.split()[-1]
-
+    filter_val = 'all' if location == 'All' else location.split()[-1]
     # Filter the dataframe by the selected signals and date range
     if Dash_selected == 'Recent data (last 1 year)':
         df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
     else:
         df_filtered = df[(df['TIME1'] >= start_date) & (df['TIME1'] <= end_date) & (df['ADDRESS'].isin(signals))]
-    
+
     # Aggregate the data
     if location == 'All':
         df_agg = df_filtered.resample('M', on='TIME1').agg({col: 'sum'}).reset_index()
@@ -495,7 +464,7 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
         filter_val = 'all'
     else:
         filter_val = location_selected.split()[-1]
-   
+
     # Convert start_date and end_date to datetime, if not already
     start_date = pd.to_datetime(start_date)
     end_date = pd.to_datetime(end_date)
@@ -505,17 +474,14 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
         mask = (df['TIME1'] >= start_date.tz_localize('UTC')) & (df['TIME1'] < end_date.tz_localize('UTC')) & (df['ADDRESS'].isin(signals))
         if location_selected == 'All':
             mask &= df['P'] >= 0  # include all values of P for intersections
+        elif location_selected.startswith('Phase'):
+            phase_num = int(location_selected.split()[1])
+            mask &= df['P'] == phase_num
         else:
-            if location_selected.startswith('Phase'):
-                phase_num = int(location_selected.split()[1])
-                mask &= df['P'] == phase_num
-            else:
-                mask &= df['ADDRESS'] == location_selected
-        df_filtered = df.loc[mask]
+            mask &= df['ADDRESS'] == location_selected
     else:
         mask = (df['TIME1'] >= start_date) & (df['TIME1'] <= end_date) & (df['ADDRESS'].isin(signals))
-        df_filtered = df.loc[mask]
-
+    df_filtered = df.loc[mask]
     # Define aggregation methods
     agg_functions = {
         'Hours': 'sum',
@@ -530,11 +496,11 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
     # Aggregate by location
     if location_selected == 'All':
         df_agg = df_filtered.groupby(['LAT', 'LON', 'ADDRESS', 'CITY', 'SIGNAL', 'TIME1']).agg({col: aggregation_function}).reset_index()
-        
+
     else:
         df_agg = df_filtered.groupby(['LAT', 'LON', 'ADDRESS', 'CITY', 'P', 'SIGNAL', 'TIME1']).agg({col: aggregation_function}).reset_index()
-        
-    
+
+
     df_agg['TIME1'] = pd.to_datetime(df_agg['TIME1'])
     df_agg['TIME1'] = df_agg['TIME1'].dt.strftime('%Y-%m-%d %H:%M:%S')
     df_agg = df_agg.rename(columns={'SIGNAL': 'Signal ID', 'TIME1':'Timestamp' , col:'Volume' })
@@ -623,8 +589,7 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
             }
         }}
 
-    map_1 = KeplerGl(height=600, data={'data_1': df_agg}, config=map_config)
-    return map_1
+    return KeplerGl(height=600, data={'data_1': df_agg}, config=map_config)
 
 
 # Define the Streamlit app
