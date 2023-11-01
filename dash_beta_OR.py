@@ -1,4 +1,4 @@
-# PEDAT Dashboard V.0.0.8
+# PEDAT Dashboard V.0.0.9
 #pip install protobuf==3.19.6
 
 import streamlit as st
@@ -68,7 +68,7 @@ WHERE ADDRESS IN UNNEST(@selected_signals)
 
 # Define the title
 title = 'Pedestrian Activity Data Visualization Dashboard'
-text1 = 'This website provides data and visualizations of pedestrian activity (and changes in pedestrian activity) at various (signalized) intersections throughout Oregon. We are currently showing all locations with available signal data throughout Oregon.'
+text1 = 'This website provides data and visualizations of pedestrian activity at various locations in Oregon. "Pedestrian activity" is an estimate of pedestrian crossing volume at an intersection, currently based on pedestrian push-button presses at traffic signals. See the "How to use" and "Notes" tabs on the left, or following the step-by-step instructions below.'
 #text2 = 'Data are derived from pedestrian push-button presses at traffic signals, taken from the Oregon Department of Transportation\'s [Automated Traffic Signal Performance Measures System](https://udottraffic.Oregon.gov/atspm/) website. We hope that this information is useful for public agencies to track changes in walking activity at different locations.'
 
 # Define the x and y axis labels
@@ -153,7 +153,7 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
         x_axis_label = '<b>Time<b>'
         fig = px.line(df_agg, x='Timestamp', y='Volume' ,  color='Signal ID', color_discrete_map=color_map, template=template)
     else:
-        x_axis_label = 'Date'
+        x_axis_label = '<b>Date<b>'
         fig = px.line(df_agg, x='Timestamp', y='Volume', color='Signal ID', color_discrete_map=color_map, template=template)
 
     fig.update_xaxes(title_text=x_axis_label)
@@ -230,7 +230,7 @@ def make_table(df, signals, start_date, end_date, aggregation_method, location,D
         df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby(groupby).agg(agg_dict).reset_index()
         agg_dict['P'] = 'first'
 
-    df_agg[col] = df_agg[col].apply(lambda x: '{:,.0f}'.format(x))
+    df_agg[col] = df_agg[col].round(0)
     renaming_dict = {'SIGNAL': 'Signal ID', 'TIME1': 'Timestamp', col: 'Volume', 'CITY': 'City', 'P': 'Phase', 'LAT': 'Latitude', 'LON': 'Longtitude'}
     df_agg.rename(columns=renaming_dict, inplace=True)
 
@@ -283,18 +283,20 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
     df_agg1[col] = df_agg1[col].round(0)
 
     # Create the pie chart
+    colors = [color_map.get(x, '#000000') for x in df_agg1['Signal ID']]
     fig_pie = go.Figure(data=[go.Pie(labels=df_agg1['Signal ID'], values=df_agg1[col], name='Signal ID', 
-                                 marker=dict(colors=[color_map[x] for x in df_agg1['Signal ID']]))])
+                                 marker=dict(colors=colors))])
     fig_pie.update_layout(title='Crosswalk users Activity by Signal', showlegend=True)
 
     # Create the treemap figure
+    marker_colors = df_agg1['Signal ID'].apply(lambda x: color_map.get(x, '#000000'))
     fig_treemap = go.Figure(data=go.Treemap(
         labels=df_agg1['Signal ID'],
         parents=['']*len(df_agg1),
         values=df_agg1[col], name='Signal ID',
-        marker_colors=df_agg1['Signal ID'].apply(lambda x: color_map[x])
+        marker=dict(colors=marker_colors)
     ))
-    fig_treemap.update_layout(title='Crosswalk users Activity by City', showlegend=False)
+    fig_treemap.update_layout(title='Crosswalk users Activity by location', showlegend=False)
 
     # Combine the pie, bar, and treemap charts
     fig_combined = make_subplots(rows=1, cols=2, specs=[[{'type': 'domain'}, {'type': 'treemap'}]])
@@ -303,7 +305,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
     fig_combined.update_layout(showlegend=True)
     fig_combined.update_layout(template='plotly')
     fig4 = copy.deepcopy(fig_pie)
-    fig4.update_layout(title='Crosswalk users Activity by Signal', showlegend=True , legend=dict(title='Signal ID'))
+    fig4.update_layout(title='Crosswalk users Activity by Location', showlegend=True , legend=dict(title='Signal ID'))
     fig4.update_layout(template='plotly')
     fig4.write_image("fig2.png")
     
@@ -311,6 +313,9 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
 
 #@st.cache_data()
 def make_bar_chart(df, signals, start_date, end_date, location,Dash_selected , act_selected):
+    # Convert "TIME1" to datetime and extract the hour and date information
+    df['Hour'] = pd.to_datetime(df['TIME1']).dt.hour
+    df['Date'] = pd.to_datetime(df['TIME1']).dt.date
     # Map act_selected to its corresponding column
     if act_selected == "All crosswalk users (walk, bicycle, scooter, skateboard, wheelchair, other)":
         col = 'TOTAL'
@@ -329,31 +334,28 @@ def make_bar_chart(df, signals, start_date, end_date, location,Dash_selected , a
 
     # Filter the dataframe by the selected signals and date range
     if Dash_selected == 'Recent data (last 1 year)':
-        df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
+        df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & 
+                         (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & 
+                         (df['ADDRESS'].isin(signals))]
     else:
-        df_filtered = df[(df['TIME1'] >= start_date) & (df['TIME1'] <= end_date) & (df['ADDRESS'].isin(signals))]
+        df_filtered = df[(df['TIME1'] >= start_date) & 
+                         (df['TIME1'] <= end_date) & 
+                         (df['ADDRESS'].isin(signals))]
 
     # Aggregate the data
     if location == 'All':
-        df_agg = df_filtered.groupby('TIME1').agg({col: 'sum'}).reset_index()
+        df_agg = df_filtered.groupby(['Date', 'Hour']).agg({col: 'sum'}).reset_index()
     else:
-        df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby('TIME1').agg({col: 'sum'}).reset_index()
+        df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby(['Date', 'Hour']).agg({col: 'sum'}).reset_index()
 
-    
-    # Convert the "TIME1" column to hour values
-    df_agg['TIME1'] = pd.to_datetime(df_agg['TIME1']).dt.hour
-    
-    # Aggregate the data by hour and sum the pedestrian counts
-    df_agg2 = df_agg.groupby('TIME1').agg({col: 'sum'}).reset_index()
-    
-    # Calculate the hourly average by dividing the sum of PED by number of days/hours
-    df_agg2[col] = df_agg2[col] / 24
+    # Calculate the hourly average by dividing the sum of PED by number of days
+    df_hourly_avg = df_agg.groupby('Hour').agg({col: 'mean'}).reset_index()
 
     # Round the pedestrian count to 0 decimal places
-    df_agg2[col] = df_agg2[col].round(0)
+    df_hourly_avg[col] = df_hourly_avg[col].round(0)
     
     # Define the data and layout for the bar chart
-    data = [go.Bar(x=df_agg2['TIME1'], y=df_agg2[col], text=df_agg2[col], texttemplate='%{y:,.0f}', textposition='auto')]
+    data = [go.Bar(x=df_hourly_avg['Hour'], y=df_hourly_avg[col], text=df_hourly_avg[col], texttemplate='%{y:,.0f}', textposition='auto')]
     layout = go.Layout(xaxis_title='<b>Hour of the day<b>', yaxis_title='<b>Volume<b>', xaxis=dict(tickmode='linear', dtick=1))
 
     # Create the bar chart
@@ -365,7 +367,7 @@ def make_bar_chart(df, signals, start_date, end_date, location,Dash_selected , a
     fig2.update_layout(template='plotly')
     fig2.write_image("fig3.png")
     
-    return fig_bar , df_agg2
+    return fig_bar, df_hourly_avg
 
 #@st.cache_data()
 def make_bar_chart2(df, signals, start_date, end_date, location,Dash_selected,act_selected):
@@ -385,37 +387,41 @@ def make_bar_chart2(df, signals, start_date, end_date, location,Dash_selected,ac
     else:
         filter_val = location.split()[-1]
 
+    # Convert "TIME1" to datetime and extract the day of the week information
+    df['Day_of_Week'] = pd.to_datetime(df['TIME1']).dt.dayofweek
+    df['Date'] = pd.to_datetime(df['TIME1']).dt.date
+
     # Filter the dataframe by the selected signals and date range
     if Dash_selected == 'Recent data (last 1 year)':
-        df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
+        df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) &
+                         (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) &
+                         (df['ADDRESS'].isin(signals))]
     else:
-        df_filtered = df[(df['TIME1'] >= start_date) & (df['TIME1'] <= end_date) & (df['ADDRESS'].isin(signals))]
-    
-    # Aggregate the data
-    if location == 'All':
-        df_agg = df_filtered.groupby('TIME1').agg({col: 'sum'}).reset_index()
-    else:
-        df_agg = df_filtered[df_filtered['P'] == int(filter_val)].groupby('TIME1').agg({col: 'sum'}).reset_index()
+        df_filtered = df[(df['TIME1'] >= start_date) &
+                         (df['TIME1'] <= end_date) &
+                         (df['ADDRESS'].isin(signals))]
 
-    # Convert the "TIME1" column to day of the week values (0-6, where Monday=0 and Sunday=6)
-    df_agg['TIME1'] = pd.to_datetime(df_agg['TIME1']).dt.dayofweek
+    # Filter based on the location
+    if location != 'All':
+        df_filtered = df_filtered[df_filtered['P'] == int(filter_val)]
 
-    # Aggregate the data by day of the week and calculate the average pedestrian counts
-    df_agg2 = df_agg.groupby('TIME1').agg({col: 'sum'}).reset_index()
+    # Group by date and day of the week, then sum the PED values
+    df_agg = df_filtered.groupby(['Date', 'Day_of_Week']).agg({col: 'sum'}).reset_index()
 
-    # Calculate the daily average by dividing the sum of PED by number of days/hours
-    df_agg2[col] = df_agg2[col] / 7
+    # Group by day of the week and calculate the average pedestrian counts
+    df_agg2 = df_agg.groupby('Day_of_Week').agg({col: 'mean'}).reset_index()
 
     # Round the pedestrian count to 0 decimal places
     df_agg2[col] = df_agg2[col].round(0)
-
+    
     # Create the bar chart
-    fig_bar = go.Figure(data=[go.Bar(x=df_agg2['TIME1'], y=df_agg2[col], showlegend=False ,  texttemplate='%{y:,.0f}', textposition='auto')])
+    fig_bar = go.Figure(data=[go.Bar(x=df_agg2['Day_of_Week'], y=df_agg2[col], showlegend=False ,  texttemplate='%{y:,.0f}', textposition='auto')])
 
     # Set the x-axis tick labels to the full names of the days of the week
     fig_bar.update_layout(xaxis_title='<b>Day of the week<b>', yaxis_title='<b>Volume<b>', showlegend=False)
     fig_bar.update_xaxes(tickmode='array', tickvals=[0, 1, 2, 3, 4, 5, 6], ticktext=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
     fig_bar.update_yaxes(tickformat=".0f")
+    fig_bar.update_layout(template='plotly')
     fig_bar.update_layout(template='plotly')
     fig3 = copy.deepcopy(fig_bar)
     fig3.update_layout(title='Average daily crosswalk users activity, by day-of-week, total of all locations')
@@ -444,31 +450,42 @@ def make_bar_chart3(df, signals, start_date, end_date, location,Dash_selected,ac
 
     # Filter the dataframe by the selected signals and date range
     if Dash_selected == 'Recent data (last 1 year)':
-        df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & (df['ADDRESS'].isin(signals))]
+        df_filtered = df[(df['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & 
+                         (df['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC')) & 
+                         (df['ADDRESS'].isin(signals))]
     else:
-        df_filtered = df[(df['TIME1'] >= start_date) & (df['TIME1'] <= end_date) & (df['ADDRESS'].isin(signals))]
+        df_filtered = df[(df['TIME1'] >= start_date) & 
+                         (df['TIME1'] <= end_date) & 
+                         (df['ADDRESS'].isin(signals))]
     
-    # Aggregate the data
-    if location == 'All':
-        df_agg = df_filtered.resample('M', on='TIME1').agg({col: 'sum'}).reset_index()
-    else:
-        df_agg = df_filtered[df_filtered['P'] == int(filter_val)].resample('M', on='TIME1').agg({col: 'sum'}).reset_index()
+    # Filter based on the location
+    if location != 'All':
+        df_filtered = df_filtered[df_filtered['P'] == int(filter_val)]
 
-    # Extract month from the "TIME1" column
-    df_agg['TIME1'] = df_agg['TIME1'].dt.month
+    # Resample to daily frequency and sum the PED counts
+    df_daily = df_filtered.resample('D', on='TIME1').agg({col: 'sum'}).reset_index()
 
-    # Aggregate the data by month and calculate the sum pedestrian counts
-    df_agg2 = df_agg.groupby('TIME1').agg({col: 'sum'}).reset_index()
+    # Extract month and year from the "TIME1" column
+    df_daily['Month'] = pd.to_datetime(df_daily['TIME1']).dt.month
+    df_daily['Year'] = pd.to_datetime(df_daily['TIME1']).dt.year
 
+    # Group by month and year, and calculate the average of PED
+    df_agg = df_daily.groupby(['Month']).agg({col: 'mean'}).reset_index()
 
+    # Group by month and calculate the average pedestrian counts
+    df_agg2 = df_daily.groupby('Month').agg({col: 'mean'}).reset_index()
+
+    # Round the pedestrian count to 0 decimal places
+    df_agg2[col] = df_agg2[col].round(0)
+    
     # Create the bar chart
-    fig_bar = go.Figure(data=[go.Bar(x=df_agg2['TIME1'], y=df_agg2[col], showlegend=False ,  texttemplate='%{y:,.0f}', textposition='auto')])
+    fig_bar = go.Figure(data=[go.Bar(x=df_agg2['Month'], y=df_agg2[col], showlegend=False, texttemplate='%{y:,.0f}', textposition='auto')])
 
-    # Set the x-axis tick labels to the full names of the days of the week
+    # Set the x-axis tick labels to the full names of the months
     fig_bar.update_layout(xaxis_title='<b>Month of the year<b>', yaxis_title='<b>Volume<b>', showlegend=False)
     fig_bar.update_xaxes(tickmode='array', 
-                     tickvals=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 
-                     ticktext=['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'])
+                         tickvals=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 
+                         ticktext=['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'])
     fig_bar.update_yaxes(tickformat=".0f")
     fig_bar.update_layout(template='plotly')
     fig8 = copy.deepcopy(fig_bar)
@@ -478,6 +495,67 @@ def make_bar_chart3(df, signals, start_date, end_date, location,Dash_selected,ac
 
     return fig_bar,df_agg2
 
+@st.cache_resource
+def make_bar_chart4(df, signals, start_date, end_date, location, Dash_selected, color_map,act_selected):
+    # Map act_selected to its corresponding column
+    if act_selected == "All crosswalk users (walk, bicycle, scooter, skateboard, wheelchair, other)":
+        col = 'TOTAL'
+    elif act_selected == 'Pedestrians (walk, skateboard, wheelchair)':
+        col = 'UPED'
+    elif act_selected == "People walking":
+        col = 'PED'
+    else:
+        raise ValueError(f"Invalid value for act_selected: {act_selected}")
+
+    # Filter based on location
+    if location == 'All':
+        df_filtered = df[df['ADDRESS'].isin(signals)]
+    else:
+        filter_val = location.split()[-1]
+        df_filtered = df[(df['P'] == int(filter_val)) & (df['ADDRESS'].isin(signals))]
+        
+    # Filter based on date
+    if Dash_selected == 'Recent data (last 1 year)':
+        df_filtered = df_filtered[(df_filtered['TIME1'] >= pd.to_datetime(start_date).tz_localize('UTC')) & 
+                                  (df_filtered['TIME1'] <= pd.to_datetime(end_date).tz_localize('UTC'))]
+    else:
+        df_filtered = df_filtered[(df_filtered['TIME1'] >= start_date) & (df_filtered['TIME1'] <= end_date)]
+
+    # Aggregate by SIGNAL and Date, summing up the hourly PED values
+    df_daily_sum = df_filtered.groupby(['SIGNAL', pd.Grouper(key='TIME1', freq='1D')]).agg({col: 'sum'}).reset_index()
+
+    # Calculate the average daily PED for each SIGNAL
+    df_agg = df_daily_sum.groupby('SIGNAL').agg({col: 'mean'}).reset_index()
+
+    # Create the bar chart
+    fig_bar = go.Figure()
+
+    # Only include unique SIGNALs present in the filtered DataFrame, converted to strings
+    unique_signals = df_agg['SIGNAL'].astype(int).unique()
+    
+    # Get colors for each signal based on the color map
+    bar_colors = [color_map[signal] for signal in unique_signals]
+
+    # Create the bar chart with colors
+    fig_bar.add_trace(go.Bar(x=unique_signals, y=df_agg[col], marker_color=bar_colors,
+                             texttemplate='%{y:,.0f}', textposition='auto'))
+    
+    fig_bar.update_xaxes(tickmode='array', 
+                         tickvals=unique_signals,
+                         type='category')
+
+    fig_bar.update_layout(xaxis_title='<b>Location<b>',
+                          yaxis_title='<b>Volume<b>')
+    
+
+    fig_bar.update_yaxes(tickformat=".0f")
+    fig_bar.update_layout(template='plotly')
+    fig18 = copy.deepcopy(fig_bar)
+    fig18.update_layout(title='Average daily crosswalk users activity, by locations')
+    fig18.update_layout(template='plotly')
+    fig18.write_image("fig18.png")
+
+    return fig_bar, df_agg
 
 def make_map5(df, start_date, end_date, signals, aggregation_method, location_selected, Dash_selected, act_selected):
 
@@ -633,7 +711,7 @@ def main():
     # Set the app title
     st.set_page_config(page_title='PEDAT Dashboard' , page_icon="📈" , layout="wide"  )
     # Add a title to the sidebar
-    st.title("Monitoring crosswalk users activity in Oregon")
+    st.title("Pedestrian activity in Oregon")
     st.markdown(text1)
     #st.markdown(text2)
     
@@ -658,18 +736,9 @@ def main():
     expander2 = st.sidebar.expander("**How to use**")
     with expander2:
         expander2.write('''
-                There are Four tabs available in the above. 
-                In these tabs, you can observe pedestrian activity based on selected aggregation methods at one or more signals (on a map or in a figure). 
-                You can also download a CSV file containing the data that is creating the map or figure.
+                First, use the map to select or search for specific location(s) with available data. Second, a particular type of data (recent or historical). Third, select parameters (dates, location and time units). Fourth, view the results as averages, figures, a map, data, or a report. 
         ''')
-    expander = st.sidebar.expander("**Notes**")
-    with expander:
-            expander.write('''
-                    As shown on this website in maps, figures, and tables, pedestrian activity is estimated pedestrian volume , 
-                    or an estimate of the total number of daily pedestrian crossings at an intersection. These estimated pedestrian 
-                    volumes are based on traffic signal pedestrian push-button data, obtained from high-resolution traffic signal controller 
-                    log data.
-            ''')
+
     st.sidebar.markdown("[Step 1: Select location(s)](#step-1-select-location-s)")
     st.subheader('Step 1: Select location(s)')
 
@@ -834,13 +903,13 @@ def main():
     ]
     )
 
-    st.sidebar.markdown("[Step 2: Select dashboard type](#step-2-select-dashboard-type)")
-    st.subheader('Step 2: Select dashboard type')
+    st.sidebar.markdown("[Step 2: Select data type](#step-2-select-data-type)")
+    st.subheader('Step 2: Select data type')
     dash = ['Recent data (last 1 year)'] #, 'Historical data (last 5 years)']
-    Dash_selected = st.selectbox('**Select dashboard type**', options=dash)
+    Dash_selected = st.selectbox('**Select data type**', options=dash)
 
     # Add a subtitle to the sidebar
-    #@st.cache_resource
+    @st.cache_resource
     def get_data(Dash_selected):
         if Dash_selected == 'Recent data (last 1 year)':
             df = client.query(sql_query2, job_config=job_config).to_dataframe()
@@ -875,8 +944,8 @@ def main():
         </style>
         """, unsafe_allow_html=True)
 
-    st.sidebar.markdown("[Step 3: Select dashboard parameters](#step-3-select-dashboard-parameters)")
-    st.subheader('Step 3: Select dashboard parameters')
+    st.sidebar.markdown("[Step 3: Select parameters](#step-3-select-parameters)")
+    st.subheader('Step 3: Select parameters')
     form = st.form("sidebar")
     
     # Add a calendar widget to select a date range
@@ -887,16 +956,16 @@ def main():
     if Dash_selected == 'Recent data (last 1 year)':
         locations = ['All'] + ['Phase ' + str(int(i)) for i in sorted(df[df['ADDRESS'].isin(all_addresses)]['P'].dropna().unique().tolist())]
         #locations = ['All'] + ['Phase ' + str(int(i)) for i in sorted(df['P'].dropna().unique().tolist())]
-        location_selected = form.selectbox('**Select location units**', options=locations)
+        location_selected = form.selectbox('**Location units**', options=locations)
         aggregation_methods = ['Hours', 'Days', 'Weeks', 'Months', 'Years']
-        aggregation_method_selected = form.selectbox('**Select time units**', options=aggregation_methods)
+        aggregation_method_selected = form.selectbox('**Time units**', options=aggregation_methods)
         act = ['All crosswalk users (walk, bicycle, scooter, skateboard, wheelchair, other)', 
                'Pedestrians (walk, skateboard, wheelchair)',
                'People walking']
-        act_selected = form.selectbox('**Choose pedestrian activity measure**', options=act) 
+        act_selected = form.selectbox('**Pedestrian activity measure**', options=act) 
     else:
         aggregation_methods = ['Days', 'Weeks', 'Months', 'Years']
-        aggregation_method_selected = form.selectbox('**Select time units**', options=aggregation_methods)
+        aggregation_method_selected = form.selectbox('**Time units**', options=aggregation_methods)
         location = ['All']
         location_selected = location[0]
 
@@ -928,7 +997,7 @@ def main():
         raise ValueError(f"Invalid value for act_selected: {act_selected}")
 
     total_pedestrians = int(df[col].sum().round(0))
-    num_signals = len(df['ADDRESS'].unique())
+    num_signals = len(df3['ADDRESS'].unique())
 
     # Format the metric values
     total_pedestrians_formatted = format_metric(total_pedestrians)
@@ -938,8 +1007,8 @@ def main():
     st.subheader('**Metrics**')
     col1, col2 , col3 , col4= st.columns(4)
     # Display the metric boxes
-    col1.metric("**Total**", total_pedestrians_formatted)
-    col2.metric("**Selected Signals**", num_signals_formatted)
+    col1.metric("**Total users**", total_pedestrians_formatted)
+    col2.metric("**Selected locations**", num_signals_formatted)
     col3.metric("**Start Date**" , dt_str)
     col4.metric("**End Date**" , dt_str2)
     # If "All" is selected, show all signals
@@ -948,22 +1017,20 @@ def main():
     else:
         selected_signals = selected_signals or default_address
 
-    st.sidebar.markdown("[Charts](#charts)")
-    st.subheader('**Charts**')
+    st.sidebar.markdown("[Averages](#averages)")
+    st.subheader('**Averages**')
     with st.expander("Expand"):
         if Dash_selected == 'Recent data (last 1 year)':
-
-            st.subheader('Total crosswalk users activity, by location')
-            # Add a pie chart to show pedestrian activity by signal
-            fig4 , df_agg1 = make_pie_and_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected , color_map, act_selected)
-            cv2 = df_agg1.to_csv(index=True)
+            st.subheader('Average crosswalk users activity, by locations')
+            fig16, df_agg16 = make_bar_chart4(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected, color_map, act_selected)
+            cv16 = df_agg16.to_csv(index=True)
             st.download_button(
                 label="📥 Download data",
-                data=cv2,
-                file_name="piebarchart.csv",
+                data=cv16,
+                file_name="barchart_daily_location.csv",
                 mime='text/csv',
             )
-            st.plotly_chart(fig4, use_container_width=True )
+            st.plotly_chart(fig16, use_container_width=True )
 
             st.subheader('Average hourly crosswalk users activity, by hour-of-day, total of all locations')
             fig2, df_agg3 = make_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected, act_selected)
@@ -998,74 +1065,18 @@ def main():
             )
             st.plotly_chart(fig8, use_container_width=True )
 
-            table = make_table(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected, Dash_selected, act_selected)
-            pivot_table = table.pivot_table(values='Volume', index='Timestamp', columns='Signal ID', aggfunc='sum')
-            cv1 = pivot_table.to_csv(index=True)
-            st.subheader('Time series of crosswalk users activity, by (selected time unit), by location')
-            st.download_button(
-                label="📥 Download data",
-                data=cv1,
-                file_name="TimeSeries.csv",
-                mime='text/csv',
-            )
-        
-            # Make the time series plot
-            fig1 = make_chart(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected, Dash_selected, act_selected, color_map,template='plotly')
-            st.plotly_chart(fig1, use_container_width=True )
-
-            table['Signal ID'] = table['Signal ID'].astype(str)
-            table['Volume'] = table['Volume'].astype(str)
-            table['Signal ID'] = table['Signal ID'].str.replace(',', '.')
-            table['Volume'] = table['Volume'].str.replace(',', '.')
-            table['Signal ID'] = pd.to_numeric(table['Signal ID'], errors='coerce')
-            table['Volume'] = pd.to_numeric(table['Volume'] , errors='coerce')
-            grouped = table.groupby('Signal ID')['Volume'].describe()
-            missing_counts = table['Volume'].isna().groupby(table['Signal ID']).sum()
-            grouped['Missing Count'] = missing_counts
-            DS = grouped.to_csv(index=True)
-
-            # Box Plot
-            st.subheader('Box plot of crosswalk users activity, by (selected time unit), by location')
-            signal_ids = table['Signal ID'].unique() 
-            fig = go.Figure()
-
-            for signal_id, group in table.groupby('Signal ID'):
-                if signal_id in signal_ids:
-                    fig.add_trace(go.Box(y=group['Volume'], name=f'{signal_id}', 
-                        marker=dict(color=color_map[signal_id])))
-
-            # Save the box_plot_data DataFrame to a CSV file
-            st.download_button(
-                label="📥 Download data",
-                data=DS,
-                file_name="box_plot_data.csv",
-                mime='text/csv',
-            )
-
-            fig.update_layout(yaxis_title='<b>Volume<b>', xaxis_title='<b>Location ID<b>')
-            fig.update_layout(xaxis=dict(title='Signal ID', type='category', tickmode='array', tickvals=signal_ids,
-                                        ticktext=[str(signal_id) for signal_id in signal_ids]))
-            fig.update_layout(showlegend=True)
-            st.plotly_chart(fig, theme='streamlit', use_container_width=True)
-            fig7 = copy.deepcopy(fig)
-            fig7.update_layout(title='Box plot of crosswalk users activity, by (selected time unit), by location' , showlegend=False)
-            fig7.update_layout(template='plotly')
-            fig7.write_image("fig6.png")
-
-
         else:
-            st.subheader('Total crosswalk users activity, by location')
-            # Add a pie chart to show pedestrian activity by signal
-            fig4 , df_agg1 = make_pie_and_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected , act_selected,color_map)
-            cv2 = df_agg1.to_csv(index=True)
+            st.subheader('Average crosswalk users activity, by locations')
+            fig16, df_agg16 = make_bar_chart4(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected, color_map, act_selected)
+            cv16 = df_agg16.to_csv(index=True)
             st.download_button(
                 label="📥 Download data",
-                data=cv2,
-                file_name="piebarchart.csv",
+                data=cv16,
+                file_name="barchart_daily_location.csv",
                 mime='text/csv',
             )
-            st.plotly_chart(fig4, use_container_width=True )
-
+            st.plotly_chart(fig16, use_container_width=True )
+            
             st.subheader('Average daily crosswalk users activity, by day-of-week, total of all locations')
             fig3 , df_agg4= make_bar_chart2(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected , act_selected)
             cv4 = df_agg4.to_csv(index=True)
@@ -1086,11 +1097,99 @@ def main():
                 file_name="barchartmonthly.csv",
                 mime='text/csv',
             )
-            st.plotly_chart(fig8, use_container_width=True )
+
+    st.sidebar.markdown("[Figures](#figures)")
+    st.subheader('**Figures**')
+    with st.expander("Expand"):
+        if Dash_selected == 'Recent data (last 1 year)':
+
+            st.subheader('Total crosswalk users activity, by location')
+            # Add a pie chart to show pedestrian activity by signal
+            fig4 , df_agg1 = make_pie_and_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected , color_map, act_selected)
+            cv2 = df_agg1.to_csv(index=True)
+            st.download_button(
+                label="📥 Download data",
+                data=cv2,
+                file_name="piebarchart.csv",
+                mime='text/csv',
+            )
+            st.plotly_chart(fig4, use_container_width=True )
+
+            table = make_table(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected, Dash_selected, act_selected)
+            pivot_table = table.pivot_table(values='Volume', index='Timestamp', columns='Signal ID', aggfunc='sum')
+            cv1 = pivot_table.to_csv(index=True)
+            selected_method_lower = aggregation_method_selected.lower()
+            st.subheader(f'Time series of crosswalk users activity, by {selected_method_lower}, by location')
+            st.download_button(
+                label="📥 Download data",
+                data=cv1,
+                file_name="TimeSeries.csv",
+                mime='text/csv',
+            )
+        
+            # Make the time series plot
+            fig1 = make_chart(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected, Dash_selected, act_selected, color_map,template='plotly')
+            st.plotly_chart(fig1, use_container_width=True )
+
+            table['Signal ID'] = table['Signal ID'].astype(str)
+            table['Volume'] = table['Volume'].astype(str)
+            table['Signal ID'] = table['Signal ID'].str.replace(',', '.')
+            table['Volume'] = table['Volume'].str.replace(',', '.')
+            table['Signal ID'] = pd.to_numeric(table['Signal ID'], errors='coerce')
+            table['Volume'] = pd.to_numeric(table['Volume'] , errors='coerce')
+            grouped = table.groupby('Signal ID')['Volume'].describe().round(0)
+            missing_counts = table['Volume'].isna().groupby(table['Signal ID']).sum()
+            grouped['Missing Count'] = missing_counts
+            DS = grouped.to_csv(index=True)
+
+            # Box Plot
+            st.subheader(f'Box plot of crosswalk users activity, by {selected_method_lower}, by location')
+            signal_ids = table['Signal ID'].unique() 
+            fig = go.Figure()
+
+            for signal_id, group in table.groupby('Signal ID'):
+                if signal_id in signal_ids:
+                    color = color_map.get(signal_id, '#000000')  # Default to black if signal_id not found
+                    fig.add_trace(go.Box(y=group['Volume'], name=f'{signal_id}', 
+                                        marker=dict(color=color)))
+
+            # Save the box_plot_data DataFrame to a CSV file
+            st.download_button(
+                label="📥 Download data",
+                data=DS,
+                file_name="box_plot_data.csv",
+                mime='text/csv',
+            )
+
+            fig.update_layout(yaxis_title='<b>Volume<b>', xaxis_title='<b>Location ID<b>')
+            fig.update_layout(xaxis=dict(title='Signal ID', type='category', tickmode='array', tickvals=signal_ids,
+                                        ticktext=[str(signal_id) for signal_id in signal_ids]))
+            fig.update_layout(showlegend=True)
+            st.plotly_chart(fig, theme='streamlit', use_container_width=True)
+            fig7 = copy.deepcopy(fig)
+            fig7.update_layout(title=f'Box plot of crosswalk users activity, by {selected_method_lower}, by location' , showlegend=False)
+            fig7.update_layout(template='plotly')
+            fig7.write_image("fig6.png")
+
+
+        else:
+            st.subheader('Total crosswalk users activity, by location')
+            # Add a pie chart to show pedestrian activity by signal
+            fig4 , df_agg1 = make_pie_and_bar_chart(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected , act_selected,color_map)
+            cv2 = df_agg1.to_csv(index=True)
+            st.download_button(
+                label="📥 Download data",
+                data=cv2,
+                file_name="piebarchart.csv",
+                mime='text/csv',
+            )
+            st.plotly_chart(fig4, use_container_width=True )
+
             table = make_table(df, selected_signals, start_datetime, end_datetime, aggregation_method_selected, location_selected, Dash_selected, act_selected)
             pivot_table = table.pivot_table(values='Pedestrian', index='Timestamp', columns='Signal ID', aggfunc='sum')
             cv1 = pivot_table.to_csv(index=True)
-            st.subheader('Time series of crosswalk users activity, by (selected time unit), by location')
+            selected_method_lower = aggregation_method_selected.lower()
+            st.subheader(f'Time series of crosswalk users activity, by {selected_method_lower}, by location')
             st.download_button(
                 label="📥 Download data",
                 data=cv1,
@@ -1114,14 +1213,15 @@ def main():
             DS = grouped.to_csv(index=True)
 
             # Box Plot
-            st.subheader('Box plot of crosswalk users activity, by (selected time unit), by location')
+            st.subheader(f'Box plot of crosswalk users activity, by {selected_method_lower}, by location')
             signal_ids = table['Signal ID'].unique() 
             fig = go.Figure()
 
             for signal_id, group in table.groupby('Signal ID'):
                 if signal_id in signal_ids:
+                    color = color_map.get(signal_id, '#000000')  # Default to black if signal_id not found
                     fig.add_trace(go.Box(y=group['Volume'], name=f'{signal_id}', 
-                        marker=dict(color=color_map[signal_id])))
+                                        marker=dict(color=color)))
 
             # Save the box_plot_data DataFrame to a CSV file
             st.download_button(
@@ -1132,12 +1232,12 @@ def main():
             )
 
             fig.update_layout(yaxis_title='<b>Volume<b>', xaxis_title='<b>Location ID<b>')
-            fig.update_layout(xaxis=dict(title='<b>Signal ID<b>', type='category', tickmode='array', tickvals=signal_ids,
+            fig.update_layout(xaxis=dict(title='Signal ID', type='category', tickmode='array', tickvals=signal_ids,
                                         ticktext=[str(signal_id) for signal_id in signal_ids]))
             fig.update_layout(showlegend=True)
             st.plotly_chart(fig, theme='streamlit', use_container_width=True)
             fig7 = copy.deepcopy(fig)
-            fig7.update_layout(title='Box plot of crosswalk users activity, by (selected time unit), by location' , showlegend=False)
+            fig7.update_layout(title=f'Box plot of crosswalk users activity, by {selected_method_lower}, by location' , showlegend=False)
             fig7.update_layout(template='plotly')
             fig7.write_image("fig6.png")
 
@@ -1147,11 +1247,11 @@ def main():
         map_2= make_map5(df,start_datetime, end_datetime , selected_signals , aggregation_method_selected , location_selected, Dash_selected, act_selected)
         keplergl_static(map_2)
     
-    st.sidebar.markdown("[Downloads](#downloads)")
-    st.subheader('**Downloads**')
+    st.sidebar.markdown("[Data](#data)")
+    st.subheader('**Data**')
     with st.expander("Expand"): 
         # Filter your data based on the selected date range
-        st.subheader('Raw data')
+        st.subheader(f'Data, by {selected_method_lower}, by location')
         
         # Display the filtered data in a table
         
@@ -1175,11 +1275,11 @@ def main():
 
 
         # Discriptive statistics
-        st.subheader('Discriptive Statistics')
+        st.subheader(f'Descriptive  statistics, by {selected_method_lower}, by location')
         st.download_button(
         label="📥 Download",
         data=DS,
-        file_name="DiscriptiveStat.csv",
+        file_name="Descriptive Stat.csv",
         mime='text/csv',)
         st.dataframe(grouped , use_container_width=True)
     
@@ -1342,7 +1442,14 @@ def main():
         </style>
         """, unsafe_allow_html=True)
    
-
+    expander = st.sidebar.expander("**Notes**")
+    with expander:
+            expander.write('''
+                    As shown on this website in maps, figures, and tables, pedestrian activity is estimated pedestrian volume , 
+                    or an estimate of the total number of daily pedestrian crossings at an intersection. These estimated pedestrian 
+                    volumes are based on traffic signal pedestrian push-button data, obtained from high-resolution traffic signal controller 
+                    log data.
+            ''')
     hide_menu_style = """
         <style>
         #MainMenu {visibility: hidden;}
