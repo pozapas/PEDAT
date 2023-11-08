@@ -685,7 +685,7 @@ def main():
     icon_size = (7, 14)
     
     # Create the map object
-    m = folium.Map(location=[mean_lat,mean_lng], zoom_start=8 , tiles='CartoDB Positron')
+    m = folium.Map(location=[mean_lat,mean_lng], zoom_start=8)
 
 
 
