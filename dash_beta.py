@@ -266,7 +266,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
         values=df_agg1['PED'], name='Signal ID',
         marker=dict(colors=marker_colors)
     ))
-    fig_treemap.update_layout(title='Pedestrian Activity by City', showlegend=False)
+    fig_treemap.update_layout(title='Pedestrian Activity by location', showlegend=False)
 
     # Combine the pie, bar, and treemap charts
     fig_combined = make_subplots(rows=1, cols=2, specs=[[{'type': 'domain'}, {'type': 'treemap'}]])
@@ -824,7 +824,7 @@ def main():
     st.sidebar.markdown("[Step 2: Select data type](#step-2-select-data-type)")
     st.subheader('Step 2: Select data type')
     dash = ['Recent data (last 1 year)' , 'Historical data (last 5 years)']
-    Dash_selected = st.selectbox('**Select dashboard type**', options=dash)
+    Dash_selected = st.selectbox('**Select data type**', options=dash)
 
     # Add a subtitle to the sidebar
     if Dash_selected == 'Recent data (last 1 year)':
@@ -998,8 +998,6 @@ def main():
                 mime='text/csv',
             )
             st.plotly_chart(fig8, use_container_width=True )
-            
-           
 
 
     st.sidebar.markdown("[Figures](#figures)")
