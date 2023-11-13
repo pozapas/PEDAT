@@ -1,11 +1,11 @@
-streamlit
+streamlit>=1.13.0
+folium>=0.13,<0.15
 pandas
 plotly
 pydeck
 datetime
 matplotlib
 numpy
-folium
 google-cloud-bigquery
 google-auth
 shapely
