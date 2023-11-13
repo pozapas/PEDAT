@@ -1343,12 +1343,12 @@ def main():
                 pdf.image(image_path, x=36, y=y_position, w=233)
 
             pdf_buffer = BytesIO()
-            pdf_bytes = pdf.output(dest='S').encode('latin-1')  # 'S' means return as string
+            pdf_bytes = pdf.output(dest='S')  # 'S' means return as string
             pdf_buffer.write(pdf_bytes)
             pdf_buffer.seek(0)  # Go to the beginning of the BytesIO object
 
             # Create a download link for the PDF
-            b64_pdf = base64.b64encode(pdf_buffer.read()).decode('utf-8')
+            b64_pdf = base64.b64encode(pdf_bytes.read()).decode('utf-8')
             href = f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="report.pdf">Download PDF report</a>'
             st.markdown(href, unsafe_allow_html=True)
 
