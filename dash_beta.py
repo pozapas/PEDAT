@@ -1314,19 +1314,31 @@ def main():
             # Display the selected time unit
             pdf.cell(0, 6, f'Time unit: {aggregation_method_selected}', ln=True)
             
-            subtitles = [
-                'Average daily pedestrian activity, by location',
-                'Average hourly pedestrian activity, by hour-of-day, total of all locations',
-                'Average daily pedestrian activity, by day-of-week, total of all locations',
-                'Average daily pedestrian activity, by month-of-year, total of all locations',
-                'Total pedestrian activity, by location',
-                f'Time series of pedestrian activity, by {selected_method_lower}, by location',
-                f'Box plot of pedestrian activity, by {selected_method_lower}, by location',
-            ]
-            
             # Define figure indices based on condition
             figure_indices = [7, 3, 4, 5, 2, 1, 6] if Dash_selected == 'Recent data (last 1 year)' else [7, 4, 5, 2, 1, 6]
 
+            # Define subtitles based on the condition
+            if Dash_selected == 'Recent data (last 1 year)':
+                subtitles = [
+                    'Average daily pedestrian activity, by location',
+                    'Average hourly pedestrian activity, by hour-of-day, total of all locations',
+                    'Average daily pedestrian activity, by day-of-week, total of all locations',
+                    'Average daily pedestrian activity, by month-of-year, total of all locations',
+                    'Total pedestrian activity, by location',
+                    f'Time series of pedestrian activity, by {selected_method_lower}, by location',
+                    f'Box plot of pedestrian activity, by {selected_method_lower}, by location',
+                ]
+            else:
+                subtitles = [
+                    'Average daily pedestrian activity, by location',
+                    'Average daily pedestrian activity, by day-of-week, total of all locations',
+                    'Average daily pedestrian activity, by month-of-year, total of all locations',
+                    'Total pedestrian activity, by location',
+                    f'Time series of pedestrian activity, by {selected_method_lower}, by location',
+                    f'Box plot of pedestrian activity, by {selected_method_lower}, by location',
+                ]
+
+            # Iterate through figures and subtitles
             for i, subtitle in zip(figure_indices, subtitles):
                 # Add a page for each figure
                 pdf.add_page()
