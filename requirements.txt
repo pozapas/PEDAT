@@ -1,9 +1,9 @@
-streamlit
+streamlit>=1.13.0
+folium>=0.13,<0.15
 pandas
 plotly
 pydeck
 datatable
 matplotlib
-folium
 streamlit_folium
 shapely
