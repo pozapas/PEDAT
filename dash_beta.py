@@ -43,6 +43,7 @@ from streamlit_keplergl import keplergl_static
 import matplotlib.colors
 from folium.plugins import Search
 
+
 # Create API client.
 credentials = service_account.Credentials.from_service_account_info(
     st.secrets["gcp_service_account"]
@@ -102,15 +103,15 @@ def format_metric(value):
 
 @st.cache_resource
 def make_chart(df, signals, start_date, end_date, aggregation_method, location, Dash_selected, color_map, template='plotly'):
-    if aggregation_method == 'Hours':
+    if aggregation_method == 'Hour':
         groupby = ['SIGNAL','ADDRESS', pd.Grouper(key='TIME1', freq='1H')]
-    elif aggregation_method == 'Days':
+    elif aggregation_method == 'Day':
         groupby = ['SIGNAL','ADDRESS', pd.Grouper(key='TIME1', freq='1D')]
-    elif aggregation_method == 'Weeks':
+    elif aggregation_method == 'Week':
         groupby = ['SIGNAL','ADDRESS', pd.Grouper(key='TIME1', freq='1W')]
-    elif aggregation_method == 'Months':
+    elif aggregation_method == 'Month':
         groupby = ['SIGNAL','ADDRESS', pd.Grouper(key='TIME1', freq='1M')]
-    elif aggregation_method == 'Years':
+    elif aggregation_method == 'Year':
         groupby = ['SIGNAL','ADDRESS', pd.Grouper(key='TIME1', freq='1Y')]
 
     if location == 'All':
@@ -139,7 +140,7 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
         df_agg = df_agg.rename(columns={'SIGNAL': 'Signal ID' , 'TIME1':'Timestamp' , 'PED':'Pedestrian' })
 
     # Create the line chart
-    if aggregation_method == 'Hours':
+    if aggregation_method == 'Hour':
         x_axis_label = '<b>Time<b>'
         fig = px.line(df_agg, x='Timestamp', y='Pedestrian' ,  color='Signal ID', color_discrete_map=color_map, template=template)
     else:
@@ -149,7 +150,7 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
     fig.update_xaxes(title_text=x_axis_label)
     fig.update_yaxes(title_text='<b>Pedestrian Volume<b>')
     fig.update_traces(line=dict(width=3))
-    fig.update_layout(showlegend=True)
+    fig.update_layout(showlegend=True , legend_title_text='<b>Location<b>')
 
     # Set the time slider at the bottom
     fig.update_layout(
@@ -172,22 +173,29 @@ def make_chart(df, signals, start_date, end_date, aggregation_method, location, 
 
     fig6 = copy.deepcopy(fig)
     fig6.update_layout(xaxis=dict(rangeselector=dict(visible=False ),rangeslider=dict(visible=False),type="date"))
-    fig6.update_layout(title='Time series of pedestrian activity, by (selected time unit), by location' , showlegend=True)
+    fig6.update_layout(
+        showlegend=True,
+        legend_title_text='<b>Location<b>',
+        template='plotly',
+        autosize=False,
+        width=920,
+        height=520
+        )
     fig6.write_image("fig1.png")
     return fig
 
 
 @st.cache_resource
 def make_table(df, signals, start_date, end_date, aggregation_method, location,Dash_selected):
-    if aggregation_method == 'Hours':
+    if aggregation_method == 'Hour':
         groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1H')]
-    elif aggregation_method == 'Days':
+    elif aggregation_method == 'Day':
         groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1D')]
-    elif aggregation_method == 'Weeks':
+    elif aggregation_method == 'Week':
         groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1W')]
-    elif aggregation_method == 'Months':
+    elif aggregation_method == 'Month':
         groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1M')]
-    elif aggregation_method == 'Years':
+    elif aggregation_method == 'Year':
         groupby = ['ADDRESS', pd.Grouper(key='TIME1', freq='1Y')]
 
     if location == 'All':
@@ -256,7 +264,7 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
     colors = [color_map.get(x, '#000000') for x in df_agg1['Signal ID']]
     fig_pie = go.Figure(data=[go.Pie(labels=df_agg1['Signal ID'], values=df_agg1['PED'], name='Signal ID', 
                                  marker=dict(colors=colors))])
-    fig_pie.update_layout(title='Pedestrian Activity by Signal', showlegend=True)
+    #fig_pie.update_layout(title='Pedestrian Activity by Signal', showlegend=True)
 
     # Create the treemap figure
     marker_colors = df_agg1['Signal ID'].apply(lambda x: color_map.get(x, '#000000'))
@@ -275,8 +283,11 @@ def make_pie_and_bar_chart(df, signals, start_date, end_date, location,Dash_sele
     fig_combined.update_layout(showlegend=True)
     fig_combined.update_layout(template='plotly')
     fig4 = copy.deepcopy(fig_pie)
-    fig4.update_layout(title='Pedestrian Activity by Signal', showlegend=True , legend=dict(title='Signal ID'))
-    fig4.update_layout(template='plotly')
+    fig4.update_layout(
+        showlegend=True,
+        legend=dict(title='<b>Location<b>'),
+        template='plotly'
+    )
     fig4.write_image("fig2.png")
     
     return fig_combined , df_agg1
@@ -325,7 +336,7 @@ def make_bar_chart(df, signals, start_date, end_date, location, Dash_selected):
     fig_bar.update_yaxes(tickformat=".0f")
     fig_bar.update_layout(template='plotly')
     fig2 = copy.deepcopy(fig_bar)
-    fig2.update_layout(title='Average hourly pedestrian activity, by hour-of-day, total of all locations')
+    fig2.update_layout(autosize=False, width=920, height=520)
     fig2.update_layout(template='plotly')
     fig2.write_image("fig3.png")
     
@@ -377,7 +388,7 @@ def make_bar_chart2(df, signals, start_date, end_date, location, Dash_selected):
     fig_bar.update_layout(template='plotly')
     fig_bar.update_layout(template='plotly')
     fig3 = copy.deepcopy(fig_bar)
-    fig3.update_layout(title='Average daily pedestrian activity, by day-of-week, total of all locations')
+    fig3.update_layout(autosize=False, width=920, height=520)
     fig3.update_layout(template='plotly')
     fig3.write_image("fig4.png")
 
@@ -433,7 +444,7 @@ def make_bar_chart3(df, signals, start_date, end_date, location, Dash_selected):
     fig_bar.update_yaxes(tickformat=".0f")
     fig_bar.update_layout(template='plotly')
     fig8 = copy.deepcopy(fig_bar)
-    fig8.update_layout(title='Average daily pedestrian activity, by month-of-year, total of all locations')
+    fig8.update_layout(autosize=False, width=920, height=520)
     fig8.update_layout(template='plotly')
     fig8.write_image("fig5.png")
 
@@ -485,9 +496,9 @@ def make_bar_chart4(df, signals, start_date, end_date, location, Dash_selected, 
     fig_bar.update_yaxes(tickformat=".0f")
     fig_bar.update_layout(template='plotly')
     fig18 = copy.deepcopy(fig_bar)
-    fig18.update_layout(title='Average daily pedestrian activity, by locations')
+    fig18.update_layout(autosize=False, width=920, height=520)
     fig18.update_layout(template='plotly')
-    fig18.write_image("fig18.png")
+    fig18.write_image("fig7.png")
 
     return fig_bar, df_agg
 
@@ -515,11 +526,11 @@ def make_map5(df, start_date, end_date, signals, aggregation_method, location_se
 
     # Define aggregation methods
     agg_functions = {
-        'Hours': 'sum',
-        'Days': 'sum',
-        'Weeks': 'sum',
-        'Months': 'sum',
-        'Years': 'sum'
+        'Hour': 'sum',
+        'Day': 'sum',
+        'Week': 'sum',
+        'Month': 'sum',
+        'Year': 'sum'
     }
 
     aggregation_function = agg_functions[aggregation_method]
@@ -685,7 +696,7 @@ def main():
     icon_size = (7, 14)
     
     # Create the map object
-    m = folium.Map(location=[mean_lat,mean_lng], zoom_start=8, tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map' )
+    m = folium.Map(location=[mean_lat,mean_lng], zoom_start=8 , tiles = 'https://api.mapbox.com/styles/v1/bashasvari/clhgx1yir00h901q1ecbt9165/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYmFzaGFzdmFyaSIsImEiOiJjbGVmaTdtMmIwcXkzM3Jxam9hb2pwZ3BoIn0.JmYank8e3bmQ7RmRiVdTIg' , attr='PEDAT map')
 
 
 
@@ -867,12 +878,12 @@ def main():
         locations = ['All'] + ['Phase ' + str(int(i)) for i in sorted(df[df['ADDRESS'].isin(all_addresses)]['P'].dropna().unique().tolist())]
         #locations = ['All'] + ['Phase ' + str(int(i)) for i in sorted(df['P'].dropna().unique().tolist())]
         location_selected = form.selectbox('**Location unit**', options=locations)
-        aggregation_methods = ['Hours', 'Days', 'Weeks', 'Months', 'Years']
-        aggregation_method_selected = form.selectbox('**Time units**', options=aggregation_methods)
+        aggregation_methods = ['Hour', 'Day', 'Week', 'Month', 'Year']
+        aggregation_method_selected = form.selectbox('**Time unit**', options=aggregation_methods)
         # Create the locations list based on the modified list of addresses
         
     else:
-        aggregation_methods = ['Days', 'Weeks', 'Months', 'Years']
+        aggregation_methods = ['Day', 'Week', 'Month', 'Year']
         aggregation_method_selected = form.selectbox('**Time unit**', options=aggregation_methods)
         location = ['All']
         location_selected = location[0]
@@ -920,7 +931,7 @@ def main():
     st.subheader('**Averages**')
     with st.expander("Expand"):
         if Dash_selected == 'Recent data (last 1 year)':
-            st.subheader('Average daily pedestrian activity, by locations')
+            st.subheader('Average daily pedestrian activity, by location')
             fig16, df_agg16 = make_bar_chart4(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected, color_map)
             cv16 = df_agg16.to_csv(index=True)
             st.download_button(
@@ -966,7 +977,7 @@ def main():
 
       
         else:
-            st.subheader('Average daily pedestrian activity, by locations')
+            st.subheader('Average daily pedestrian activity, by location')
             fig16, df_agg16 = make_bar_chart4(df, selected_signals, start_datetime, end_datetime, location_selected, Dash_selected, color_map)
             cv16 = df_agg16.to_csv(index=True)
             st.download_button(
@@ -1067,10 +1078,10 @@ def main():
             fig.update_layout(yaxis_title='<b>Pedestrian Volume<b>', xaxis_title='<b>Location<b>')
             fig.update_layout(xaxis=dict(title='<b>Location<b>', type='category', tickmode='array', tickvals=signal_ids,
                                         ticktext=[str(signal_id) for signal_id in signal_ids]))
-            fig.update_layout(showlegend=True)
+            fig.update_layout(showlegend=False)
             st.plotly_chart(fig, theme='streamlit', use_container_width=True)
             fig7 = copy.deepcopy(fig)
-            fig7.update_layout(title=f'Box plot of pedestrian activity, by {selected_method_lower}, by location' , showlegend=False)
+            fig7.update_layout(autosize=False, width=920, height=520 , showlegend=False)
             fig7.update_layout(template='plotly')
             fig7.write_image("fig6.png")
 
@@ -1136,10 +1147,10 @@ def main():
             fig.update_layout(yaxis_title='<b>Pedestrian Volume<b>', xaxis_title='<b>Location<b>')
             fig.update_layout(xaxis=dict(title='<b>Location<b>', type='category', tickmode='array', tickvals=signal_ids,
                                         ticktext=[str(signal_id) for signal_id in signal_ids]))
-            fig.update_layout(showlegend=True)
+            fig.update_layout(showlegend=False)
             st.plotly_chart(fig, theme='streamlit', use_container_width=True)
             fig7 = copy.deepcopy(fig)
-            fig7.update_layout(title='Box plot of pedestrian activity, by (selected time unit), by location' , showlegend=False)
+            fig7.update_layout(autosize=False, width=920, height=520 , showlegend=False)
             fig7.update_layout(template='plotly')
             fig7.write_image("fig6.png")
 
@@ -1188,11 +1199,12 @@ def main():
     class PDF(FPDF):
 
         def __init__(self):
-            super().__init__()
+            super().__init__(orientation='L')
             self.page_width = 8.5 * 72  # Letter page width in points (1 inch = 72 points)
             self.page_height = 11 * 72  # Letter page height in points
             self.l_margin = 0.5 * 72    # Left margin in points
             self.r_margin = 0.5 * 72    # Right margin in points
+            #self.add_font('DejaVu', '', 'DejaVuSansCondensed.ttf', uni=True) # Add DejaVu font
 
         def header(self):
             # Select Arial bold 15
@@ -1203,8 +1215,6 @@ def main():
             center_x = self.w / 2
             # Calculate the X position of the center of the title
             title_x = center_x - (self.get_string_width('Pedestrian Activity Data Report') / 2)
-            # Framed title at the center
-            self.cell(title_x - self.l_margin, 10, 'Pedestrian Activity Data Report', 0, 1, 'C')
             # Line break
             self.ln(20)
             # Check if we are on the first page
@@ -1214,16 +1224,28 @@ def main():
 
         def footer(self):
             # Position at 1.5 cm from bottom
-            self.set_y(-20)
+            self.set_y(-15)
             # Arial italic 8
             self.set_font('Arial', 'I', 8)
-            # Page number
-            self.cell(0, 10, 'Page %s' % self.page_no(), 0, 0, 'C')
-
-            # Adjust Y position again to put the text below page number
+            # Title
+            self.cell(0, 10, 'Pedestrian Activity Report', 0, 0, 'L')
+            # Ensure the footer is placed at 1.5 cm from the bottom
             self.set_y(-15)
-            # Add footer text
-            self.cell(0, 10, "This report generated automatically from Singleton's Transportation Lab (STL) Pedestrian Activity Dashboard", 0, 0, 'C')
+            # Set the font for the footer: Arial italic, 8
+            self.set_font('Arial', 'I', 8)
+
+            # Footer content
+            now = datetime.now()
+            date_str = now.strftime('%Y-%m-%d')
+            time_str = now.strftime('%H:%M:%S')
+            footer_str = 'Report generated on {} at {}'.format(date_str, time_str)
+
+            # Add the formatted date and time to the footer, centered
+            self.cell(0, 10, footer_str, 0, 0, 'C')
+
+            # Add the page number
+            self.cell(0, 10, 'Page ' + str(self.page_no()), 0, 0, 'R')
+
 
         def chapter_title(self, title):
             # Arial 12
@@ -1249,12 +1271,14 @@ def main():
             self.set_font('', 'I')
             self.cell(0, 5, '(end of excerpt)')
 
-    def generate_report():
+
+    def generate_report(selected_signals, start_datetime, end_datetime, location_selected, aggregation_method_selected, Dash_selected):
             # Generate plots
             pdf = PDF()
 
             # Add a page
             pdf.add_page()
+            
 
             # Add the logo to the first page after the first add_page() call
             pdf.image('logo.png', x=10, y=10, w=33/2)
@@ -1265,57 +1289,75 @@ def main():
 
             # Add a sample text
             pdf.set_font('Arial', '', 12)
-            pdf.multi_cell(0, 6, "This website provides data and visualizations of pedestrian activity at various locations in Utah. 'Pedestrian activity' is an estimate of pedestrian crossing volume at an intersection, currently based on pedestrian push-button presses at traffic signals. See the 'How to use' and 'Notes' tabs on the left, or following the step-by-step instructions below. As of 10/31/2023, this website contains pedestrian activity data for 2,030 locations in Utah between 2018 and 2022.")
+            pdf.multi_cell(0, 6, "This report provides data and visualizations of pedestrian activity at various locations in Utah. Pedestrian activity is an estimate of pedestrian crossing volume at an intersection, currently based on pedestrian push-button presses at traffic signals.")
+
 
             # Add selected signals
             pdf.set_font('Arial', 'B', 14)
             pdf.ln(5) 
-            pdf.cell(1, 10, 'Selected Signals:', ln=True, align='L')
+            pdf.cell(1, 10, 'Selected location(s):', ln=True, align='L')
             pdf.set_font('Arial', '', 12)
             for signal in selected_signals:
-                pdf.cell(1, 6, '- ' + signal, ln=True, align='L')
+                pdf.cell(1, 6, signal, ln=True, align='L')
 
             # Add duration
             pdf.set_font('Arial', 'B', 14)
             pdf.ln(5)
-            pdf.cell(0, 10, 'Duration:', ln=True)
+            pdf.cell(0, 10, 'Selected parameters:', ln=True)
             pdf.set_font('Arial', '', 12)
             start_date = start_datetime.strftime('%Y-%m-%d') 
             end_date = end_datetime.strftime('%Y-%m-%d')
-            pdf.cell(0, 10, f'{start_date} to {end_date}', ln=True)
+            pdf.cell(0, 6, f'Start date: {start_date}', ln=True)
+            pdf.cell(0, 6, f'End date: {end_date}', ln=True)
+            # Display the selected location unit
+            pdf.cell(0, 6, f'Location unit: {location_selected}', ln=True)
+            # Display the selected time unit
+            pdf.cell(0, 6, f'Time unit: {aggregation_method_selected}', ln=True)
+            
+            subtitles = [
+                'Average daily pedestrian activity, by location',
+                'Average hourly pedestrian activity, by hour-of-day, total of all locations',
+                'Average daily pedestrian activity, by day-of-week, total of all locations',
+                'Average daily pedestrian activity, by month-of-year, total of all locations',
+                'Total pedestrian activity, by location',
+                f'Time series of pedestrian activity, by {selected_method_lower}, by location',
+                f'Box plot of pedestrian activity, by {selected_method_lower}, by location',
+            ]
+            
+            # Define figure indices based on condition
+            figure_indices = [7, 3, 4, 5, 2, 1, 6] if Dash_selected == 'Recent data (last 1 year)' else [7, 4, 5, 2, 1, 6]
 
-            # Add each figure to the report with subtitles
-            if Dash_selected == 'Recent data (last 1 year)':
-                subtitles = ['Time series plot', 'Hourly pedestrian activity plot', 'Daily pedestrian activity plot' , 'Pedestrian Activity in relation to Signal and City', 'Pedestrian Activity by Location' , 'Box plot']
-                for i, subtitle in zip(range(1, 7), subtitles):
-                    pdf.add_page()
-                    pdf.set_font('Arial', 'B', 14)
-                    pdf.cell(0, 10, subtitle, ln=True)
-                    pdf.image(f'fig{i}.png', x=10, y=20, w=190)
-            else:
-                    subtitles = ['Time series plot', 'Daily pedestrian activity plot', 'Pedestrian Activity in relation to Signal and City', 'Pedestrian Activity by Location' , 'Box plot']
-                    figure_indices = [1, 2, 4, 5, 6]  # Indices of the figures to be used
+            for i, subtitle in zip(figure_indices, subtitles):
+                # Add a page for each figure
+                pdf.add_page()
+                
+                # Set subtitle for the image
+                pdf.set_font('Arial', 'B', 14)
+                pdf.cell(0, 10, subtitle, ln=True)
+                
+                # Calculate the y position for the image, considering the space taken by the subtitle
+                y_position = pdf.get_y()
+                
+                # Add image to the page, fit to available width
+                image_path = f'fig{i}.png'
+                pdf.image(image_path, x=36, y=y_position, w=233)
 
-                    for i, subtitle in zip(figure_indices, subtitles):
-                        pdf.add_page()
-                        pdf.set_font('Arial', 'B', 14)
-                        pdf.cell(0, 10, subtitle, ln=True)
-                        pdf.image(f'fig{i}.png', x=10, y=20, w=190)
-
-            # Save the PDF to a BytesIO object
             pdf_buffer = BytesIO()
-            pdf.output(pdf_buffer, "F")
-            pdf_bytes = pdf_buffer.getvalue()
+            pdf_bytes = pdf.output(dest='S').encode('latin-1')  # 'S' means return as string
+            pdf_buffer.write(pdf_bytes)
+            pdf_buffer.seek(0)  # Go to the beginning of the BytesIO object
 
             # Create a download link for the PDF
-            b64_pdf = base64.b64encode(pdf_bytes).decode()
-            href = f'<a href="data:file/pdf;base64,{b64_pdf}" download="report.pdf">Click here to download the PDF report</a>'
+            b64_pdf = base64.b64encode(pdf_buffer.read()).decode('utf-8')
+            href = f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="report.pdf">Download PDF report</a>'
             st.markdown(href, unsafe_allow_html=True)
 
-            files_to_remove = ["fig1.png", "fig3.png", "fig4.png", "fig5.png" ,  "fig6.png"]
+            pdf_buffer.close()
 
-            if os.path.exists("fig2.png"):
-                os.remove("fig2.png")
+            files_to_remove = ["fig1.png", "fig2.png", "fig4.png", "fig5.png" ,  "fig6.png" , "fig7.png"]
+
+            if os.path.exists("fig3.png"):
+                os.remove("fig3.png")
 
             for file in files_to_remove:
                 if os.path.exists(file):
@@ -1325,7 +1367,7 @@ def main():
     st.subheader('Report')
     with st.expander("Expand"):
         if st.button('Generate PDF report'):
-                generate_report()
+                generate_report(selected_signals, start_datetime, end_datetime, location_selected, aggregation_method_selected, Dash_selected)
 
     st.sidebar.markdown(
         """<style>
