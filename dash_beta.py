@@ -42,6 +42,7 @@ from keplergl import KeplerGl
 from streamlit_keplergl import keplergl_static
 import matplotlib.colors
 from folium.plugins import Search
+import pytz
 
 
 # Create API client.
@@ -1235,9 +1236,17 @@ def main():
             self.set_font('Arial', 'I', 8)
 
             # Footer content
-            now = datetime.now()
+            # Set the timezone to 'America/Denver' for Utah
+            user_timezone = pytz.timezone('America/Denver')
+            
+            # Get the current time in the Utah timezone
+            now = datetime.now(user_timezone)
+            
+            # Format the date and time strings
             date_str = now.strftime('%Y-%m-%d')
             time_str = now.strftime('%H:%M:%S')
+            
+            # Create the footer string
             footer_str = 'Report generated on {} at {}'.format(date_str, time_str)
 
             # Add the formatted date and time to the footer, centered
