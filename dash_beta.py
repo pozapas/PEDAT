@@ -1,48 +1,61 @@
 # PEDAT Dashboard V.0.0.9
-#pip install protobuf==3.19.6
 
+# Streamlit for web app functionality
 import streamlit as st
+import streamlit.components.v1 as components
+from streamlit_folium import st_folium
+from streamlit_keplergl import keplergl_static
+
+# Data manipulation and analysis
 import pandas as pd
+import numpy as np
+import json
+
+# Visualization libraries
 import plotly.express as px
-import pydeck as pdk
-from datetime import datetime, date, timedelta
-import time
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
-import numpy as np
-import base64
-from io import BytesIO
-import os
-import matplotlib.pyplot as plt
-import streamlit.components.v1 as components
-import json
-import folium
-from streamlit_folium import st_folium
-from folium.plugins import Draw
-from shapely.geometry import Polygon, Point
-from google.cloud import bigquery
-from google.oauth2 import service_account
-from folium.plugins import MarkerCluster
-from fpdf import FPDF
-from tempfile import NamedTemporaryFile
-import threading
-from PIL import Image
 import plotly.io as pio
-import io
-from reportlab.lib.pagesizes import landscape, letter,A4
+import matplotlib.pyplot as plt
+import matplotlib.colors
+import folium
+from folium.plugins import Draw, MarkerCluster, Search
+from keplergl import KeplerGl
+import pydeck as pdk
+
+# Date and time handling
+from datetime import datetime, date, timedelta
+import pytz
+import time
+
+# Geospatial and geometry operations
+from shapely.geometry import Polygon, Point
+
+# PDF and image handling
+from fpdf import FPDF
+from PIL import Image
+from reportlab.lib.pagesizes import landscape, letter, A4
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
-import tempfile
 import imgkit
+import tempfile
+from io import BytesIO
+from tempfile import NamedTemporaryFile
+
+# Google Cloud services
+from google.cloud import bigquery
+from google.oauth2 import service_account
+
+# Miscellaneous utilities
+import os
+import base64
+import threading
+import random
 import copy
 import kaleido
-pio.kaleido.scope.default_scale = 2 
-import random
-from keplergl import KeplerGl
-from streamlit_keplergl import keplergl_static
-import matplotlib.colors
-from folium.plugins import Search
-import pytz
+
+# Setting default scale for kaleido
+pio.kaleido.scope.default_scale = 2
 
 
 # Create API client.
