@@ -36,15 +36,14 @@ pip install -r requirements.txt
 ```bash
 streamlit run dash_beta.py
 ```
-
-## Usage
-- Launch the PEDAT dashboard through Streamlit to start visualizing pedestrian data.
-- Explore different visualization modules like Folium maps, Plotly charts, and Kepler.gl.
-- Customize data views using the provided filters and settings.
-
+## Manuals and Guides
+In the `manual` folder of the repository, you will find detailed guides to help you get started and make the most out of PEDAT:
+- **PEDAT User Guide:** A comprehensive guide to using the PEDAT app, detailing all features and functionalities.
+- **How to Dockerize PEDAT App:** Instructions on how to dockerize the PEDAT application for easy deployment and scalability.
+- **How to Install PEDAT App from Docker Hub:** Step-by-step guide for installing the PEDAT app using the Docker image from Docker Hub.
+  
 ## Docker Support
 PEDAT is also available as a Docker image. To use it:
-
 1. Pull the Docker image from Docker Hub:
 ```bash
 docker pull pozapas/pedat
@@ -55,7 +54,7 @@ docker run -p 8501:8501 pozapas/pedat
 ```
 
 ## Contributing
-Contributions to PEDAT are welcome. Please read our contributing guidelines and submit your pull requests or issues through GitHub.
+Contributions to PEDAT are welcome. Please read our guidelines and submit your pull requests or issues through GitHub.
 
 ## License
 [MIT License](https://opensource.org/licenses/MIT)
